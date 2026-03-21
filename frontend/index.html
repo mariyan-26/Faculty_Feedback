@@ -9,14 +9,18 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap"
     rel="stylesheet">
+  <script>
+    let theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    document.documentElement.setAttribute('data-theme', theme);
+  </script>
   <style>
     :root {
       --bg: #080c14;
       --s1: #0e1420;
       --s2: #131929;
       --s3: #192035;
-      --border: #1e2d4a;
-      --border2: #243456;
+      --border: transparent;
+      --border2: transparent;
       --accent: #4f8ef7;
       --teal: #3dd9c4;
       --gold: #f7d44f;
@@ -34,24 +38,22 @@
       --grid-color: rgba(92, 114, 153, 0.1);
     }
 
-    @media (prefers-color-scheme: light) {
-      :root {
-        --bg: #f5f7fa;
-        --s1: #ffffff;
-        --s2: #f8fafc;
-        --s3: #f1f5f9;
-        --border: #e2e8f0;
-        --border2: #cbd5e1;
-        --accent: #2563eb;
-        --teal: #0f766e;
-        --gold: #b45309;
-        --red: #be123c;
-        --purple: #6d28d9;
-        --text: #1e293b;
-        --muted: #64748b;
-        --muted2: #94a3b8;
-        --grid-color: rgba(100, 116, 139, 0.15);
-      }
+    [data-theme='light'] {
+      --bg: #f8fafc;
+      --s1: #ffffff;
+      --s2: #f1f5f9;
+      --s3: #e2e8f0;
+      --border: transparent;
+      --border2: transparent;
+      --accent: #2563eb;
+      --teal: #0f766e;
+      --gold: #b45309;
+      --red: #be123c;
+      --purple: #6d28d9;
+      --text: #0f172a;
+      --muted: #475569;
+      --muted2: #64748b;
+      --grid-color: rgba(15, 23, 42, 0.1);
     }
 
     * {
@@ -1178,17 +1180,14 @@
         <h2>Feedback <em style="font-style:italic;color:var(--accent)">Portal</em></h2>
         <p>Faculty Evaluation System</p>
       </div>
-      <div class="rtabs">
-        <button class="rtab active" onclick="setRole('admin',this)">Super Admin</button>
-        <button class="rtab" onclick="setRole('hod',this)">HOD / Dept Head</button>
-      </div>
+
       <div class="lf">
         <label>Username</label>
         <input type="text" id="lu" placeholder="Enter username" autocomplete="off" />
       </div>
       <div class="lf">
-        <label>Passcode</label>
-        <input type="password" id="lp" placeholder="Enter passcode" onkeydown="if(event.key==='Enter')doLogin()" />
+        <label>Password</label>
+        <input type="password" id="lp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()" />
         <div class="lhint" id="lhint">Admin: user <strong>admin</strong> · pass <strong>admin123</strong></div>
       </div>
       <button class="btn-login" onclick="doLogin()">Sign In →</button>
@@ -1205,6 +1204,8 @@
         <div class="rbadge" id="rbadge">ADMIN</div>
       </div>
       <div class="tr-wrap">
+        <button class="btn-sm theme-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle Light/Dark Theme"
+          style="background:transparent;border:1px solid var(--border);color:var(--text);font-size:16px;cursor:pointer;padding:6px 10px;border-radius:6px;display:flex;align-items:center;">🌙</button>
         <div class="uinfo">Signed in as <strong id="tuser">—</strong></div>
         <label class="upload-lbl" title="Upload CSV to load data">
           📂 Upload CSV
@@ -1428,16 +1429,19 @@
     Chart.defaults.scale.grid.color = getVar('--grid-color');
 
     // ── LOGIN ─────────────────────────────────────────────────────
-    let activeRole = 'admin';
-    function setRole(r, btn) {
-      activeRole = r;
-      document.querySelectorAll('.rtab').forEach(t => t.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById('lhint').innerHTML = r === 'admin'
-        ? 'Admin: user <strong>admin</strong> · pass <strong>admin123</strong>'
-        : 'HOD: user <strong>hod_mgmt</strong> · pass <strong>hod123</strong>';
-      document.getElementById('lerr').textContent = '';
+
+    document.getElementById('themeBtn').textContent = theme === 'light' ? '🌙' : '🌞';
+
+    function toggleTheme() {
+      theme = theme === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('theme', theme);
+      document.getElementById('themeBtn').textContent = theme === 'light' ? '🌙' : '🌞';
+      Chart.defaults.color = getVar('--muted');
+      Chart.defaults.scale.grid.color = getVar('--grid-color');
+      renderAll();
     }
+
 
     async function doLogin() {
       const u = document.getElementById('lu').value.trim();
@@ -1465,7 +1469,7 @@
           document.getElementById('hodnote').textContent = '🔒 Viewing data scoped to your school only.';
           document.getElementById('fSch').disabled = true;
         }
-        
+
         // Hide upload functionality for users missing upload permission
         document.querySelector('.upload-lbl').style.display = SESSION.upload ? 'flex' : 'none';
 
@@ -1674,9 +1678,22 @@
       } catch (e) { console.warn(e); }
     }
 
-    async function onSchChange() { fillDepts(); await updateDependentDropdowns(); applyFilters(); }
-    async function onDepChange() { await updateDependentDropdowns(); applyFilters(); }
-    async function onYrChange() { await updateDependentDropdowns(); applyFilters(); }
+    async function onSchChange() {
+      selectedFac = ''; document.getElementById('fac_si').value = '';
+      selectedPro = ''; document.getElementById('pro_si').value = '';
+      selectedBatch = ''; document.getElementById('bsi').value = '';
+      fillDepts(); await updateDependentDropdowns(); applyFilters();
+    }
+    async function onDepChange() {
+      selectedFac = ''; document.getElementById('fac_si').value = '';
+      selectedPro = ''; document.getElementById('pro_si').value = '';
+      selectedBatch = ''; document.getElementById('bsi').value = '';
+      await updateDependentDropdowns(); applyFilters();
+    }
+    async function onYrChange() {
+      selectedBatch = ''; document.getElementById('bsi').value = '';
+      await updateDependentDropdowns(); applyFilters();
+    }
 
     function getF() {
       return {
@@ -1696,11 +1713,11 @@
     async function resetFilters() {
       selectedBatch = ''; selectedFac = ''; selectedPro = '';
       ['fYr', 'fRat'].forEach(id => document.getElementById(id).value = '');
-      
+
       if (SESSION?.role !== 'dean') {
         document.getElementById('fSch').value = '';
       }
-      
+
       document.getElementById('fDep').value = (SESSION?.role === 'hod' && SESSION.dept) ? SESSION.dept : '';
       document.getElementById('bsi').value = '';
       document.getElementById('fac_si').value = '';
@@ -1750,20 +1767,21 @@
         const res = await fetch(`${API}/summary?${buildQS()}`);
         const d = await res.json();
         const total = d.total_ratings || 0;
-        document.getElementById('kVG').textContent = (d.very_good_pct || 0) + '%';
-        document.getElementById('klVG').textContent = `Very Good (${d.very_good || 0}/${total})`;
+
+        document.getElementById('kVG').textContent = `${(d.very_good || 0).toLocaleString()} / ${total.toLocaleString()}`;
+        document.getElementById('klVG').textContent = `Very Good (${(d.very_good_pct || 0)}%)`;
         document.getElementById('kbVG').style.width = (d.very_good_pct || 0) + '%';
 
-        document.getElementById('kG').textContent = (d.good_pct || 0) + '%';
-        document.getElementById('klG').textContent = `Good (${d.good || 0}/${total})`;
+        document.getElementById('kG').textContent = `${(d.good || 0).toLocaleString()} / ${total.toLocaleString()}`;
+        document.getElementById('klG').textContent = `Good (${(d.good_pct || 0)}%)`;
         document.getElementById('kbG').style.width = (d.good_pct || 0) + '%';
 
-        document.getElementById('kS').textContent = (d.satisfactory_pct || 0) + '%';
-        document.getElementById('klS').textContent = `Satisfactory (${d.satisfactory || 0}/${total})`;
+        document.getElementById('kS').textContent = `${(d.satisfactory || 0).toLocaleString()} / ${total.toLocaleString()}`;
+        document.getElementById('klS').textContent = `Satisfactory (${(d.satisfactory_pct || 0)}%)`;
         document.getElementById('kbS').style.width = (d.satisfactory_pct || 0) + '%';
 
-        document.getElementById('kU').textContent = (d.unsatisfactory_pct || 0) + '%';
-        document.getElementById('klU').textContent = `Unsatisfactory (${d.unsatisfactory || 0}/${total})`;
+        document.getElementById('kU').textContent = `${(d.unsatisfactory || 0).toLocaleString()} / ${total.toLocaleString()}`;
+        document.getElementById('klU').textContent = `Unsatisfactory (${(d.unsatisfactory_pct || 0)}%)`;
         document.getElementById('kbU').style.width = (d.unsatisfactory_pct || 0) + '%';
       } catch (e) { console.warn('summary error', e); }
     }
@@ -1772,17 +1790,28 @@
     async function loadFacultyCard() {
       const facV = selectedFac;
       const depV = document.getElementById('fDep').value;
-      try {
-        const qs = facV ? `faculty=${encodeURIComponent(facV)}` : (depV ? `dept=${encodeURIComponent(depV)}` : '');
-        const res = await fetch(`${API}/faculty-info?${qs}`);
-        const data = await res.json();
-        if (!data.length) {
-          document.getElementById('facAv').textContent = '✦';
-          document.getElementById('facName').textContent = 'All Faculty';
-          document.getElementById('facDept').textContent = SESSION?.dept || '—';
-          document.getElementById('facTags').innerHTML = '';
-          return;
+      const schV = document.getElementById('fSch').value;
+
+      if (!facV) {
+        document.getElementById('facAv').textContent = '✦';
+        document.getElementById('facName').textContent = 'All Faculty';
+        const displaySchool = schV || SESSION?.school || 'All Schools';
+        const displayDept = depV || SESSION?.dept || 'All Departments';
+
+        if (displaySchool === 'All Schools' && displayDept === 'All Departments') {
+          document.getElementById('facDept').textContent = 'Institution Overview';
+        } else {
+          document.getElementById('facDept').textContent = displayDept === 'All Departments' ? displaySchool : `${displayDept} · ${displaySchool}`;
         }
+        document.getElementById('facTags').innerHTML = '';
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API}/faculty-info?faculty=${encodeURIComponent(facV)}`);
+        const data = await res.json();
+        if (!data.length) return;
+
         const f = data[0];
         const initials = (f.faculty_name || '').split(' ').map(w => w[0]).join('').substring(0, 2);
         document.getElementById('facAv').textContent = initials || '✦';
@@ -1806,7 +1835,7 @@
         dc('donut');
         charts.donut = new Chart(document.getElementById('cDonut').getContext('2d'), {
           type: 'doughnut',
-          data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: '#0e1420', borderWidth: 3, hoverOffset: 8 }] },
+          data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: getVar('--s1'), borderWidth: 3, hoverOffset: 8 }] },
           options: {
             cutout: '68%',
             responsive: true,
@@ -1815,7 +1844,7 @@
             plugins: {
               legend: { display: false },
               tooltip: {
-                backgroundColor: '#192035', borderColor: '#243456', borderWidth: 1, titleColor: '#dce8ff', bodyColor: '#5c7299',
+                backgroundColor: getVar('--s3'), borderColor: getVar('--border2'), borderWidth: 1, titleColor: getVar('--text'), bodyColor: getVar('--muted'),
                 callbacks: { label: c => ` ${c.label}: ${c.raw.toLocaleString()} responses` }
               }
             }
@@ -1854,21 +1883,39 @@
           options: {
             responsive: true, maintainAspectRatio: false,
             plugins: {
-              legend: { position: 'bottom', labels: { color: '#5c7299', boxWidth: 9, font: { size: 10 }, padding: 10 } },
+              legend: { position: 'bottom', labels: { color: getVar('--muted'), boxWidth: 9, font: { size: 10 }, padding: 10 } },
               tooltip: {
-                backgroundColor: '#192035', borderColor: '#243456', borderWidth: 1, titleColor: '#dce8ff', bodyColor: '#5c7299',
+                backgroundColor: getVar('--s3'), borderColor: getVar('--border2'), borderWidth: 1, titleColor: getVar('--text'), bodyColor: getVar('--muted'),
                 callbacks: { title: c => rows[c[0].dataIndex]?.batch || '' }
               }
             },
             scales: {
-              x: { stacked: true, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#5c7299', font: { size: 10 }, maxRotation: 35, autoSkip: true, maxTicksLimit: 18 } },
-              y: { stacked: true, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#5c7299', font: { size: 10 } } }
+              x: { stacked: true, grid: { color: getVar('--grid-color') }, ticks: { color: getVar('--muted'), font: { size: 10 }, maxRotation: 35, autoSkip: true, maxTicksLimit: 18 } },
+              y: { stacked: true, grid: { color: getVar('--grid-color') }, ticks: { color: getVar('--muted'), font: { size: 10 } } }
             }
           }
         });
       } catch (e) { console.warn('batch chart error', e); }
       setLoading('cardBatch', false);
     }
+
+    const valPlugin = {
+      id: 'valPlugin',
+      afterDatasetsDraw(chart) {
+        const ctx = chart.ctx;
+        chart.data.datasets.forEach((dataset, i) => {
+          const meta = chart.getDatasetMeta(i);
+          meta.data.forEach((bar, index) => {
+            const val = dataset.data[index];
+            ctx.fillStyle = getVar('--text');
+            ctx.font = '600 11px Sora, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(Number(val).toFixed(2) + '/4', bar.x + 6, bar.y + 1);
+          });
+        });
+      }
+    };
 
     // ── SCORE TREND — horizontal bar, readable ────────────────────
     async function loadTrend() {
@@ -1894,13 +1941,15 @@
         charts.trend = new Chart(document.getElementById('cTrend').getContext('2d'), {
           type: 'bar',
           data: { labels, datasets: [{ label: 'Avg Score', data, backgroundColor: bgs, borderRadius: 4, barThickness: 20 }] },
+          plugins: [valPlugin],
           options: {
             indexAxis: 'y',
             responsive: true, maintainAspectRatio: false,
+            layout: { padding: { right: 55 } },
             plugins: {
               legend: { display: false },
               tooltip: {
-                backgroundColor: '#192035', borderColor: '#243456', borderWidth: 1, titleColor: '#dce8ff', bodyColor: '#5c7299',
+                backgroundColor: getVar('--s3'), borderColor: getVar('--border2'), borderWidth: 1, titleColor: getVar('--text'), bodyColor: getVar('--muted'),
                 callbacks: {
                   title: c => rows[c[0].dataIndex]?.batch || '',
                   label: c => ` Avg: ${c.raw.toFixed(3)} / 4.000   (${rows[c[0].dataIndex]?.response_count?.toLocaleString()} responses)`,
@@ -1909,12 +1958,12 @@
             },
             scales: {
               x: {
-                min: 1, max: 4, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: {
-                  color: '#5c7299', font: { size: 10 },
+                min: 1, max: 4, grid: { color: getVar('--grid-color') }, ticks: {
+                  color: getVar('--muted'), font: { size: 10 },
                   callback: v => ({ 1: 'Unsat.', 2: 'Satisf.', 3: 'Good', 4: 'V.Good' }[v] || v)
                 }
               },
-              y: { grid: { display: false }, ticks: { color: '#dce8ff', font: { size: 11 } } }
+              y: { grid: { display: false }, ticks: { color: getVar('--text'), font: { size: 11 } } }
             }
           }
         });
@@ -1942,12 +1991,14 @@
         charts.subj = new Chart(document.getElementById('cSubj').getContext('2d'), {
           type: 'bar',
           data: { labels, datasets: [{ label: 'Avg Score', data, backgroundColor: bgs, borderRadius: 4, barThickness: 20 }] },
+          plugins: [valPlugin],
           options: {
             indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            layout: { padding: { right: 55 } },
             plugins: {
               legend: { display: false },
               tooltip: {
-                backgroundColor: '#192035', borderColor: '#243456', borderWidth: 1, titleColor: '#dce8ff', bodyColor: '#5c7299',
+                backgroundColor: getVar('--s3'), borderColor: getVar('--border2'), borderWidth: 1, titleColor: getVar('--text'), bodyColor: getVar('--muted'),
                 callbacks: {
                   label: c => ` Avg: ${c.raw.toFixed(3)} / 4.000  (${rows[c[0].dataIndex]?.response_count?.toLocaleString()} responses)`,
                 }
@@ -1955,12 +2006,12 @@
             },
             scales: {
               x: {
-                min: 1, max: 4, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: {
-                  color: '#5c7299', font: { size: 10 },
+                min: 1, max: 4, grid: { color: getVar('--grid-color') }, ticks: {
+                  color: getVar('--muted'), font: { size: 10 },
                   callback: v => ({ 1: 'Unsat.', 2: 'Satisf.', 3: 'Good', 4: 'V.Good' }[v] || v)
                 }
               },
-              y: { grid: { display: false }, ticks: { color: '#dce8ff', font: { size: 11 } } }
+              y: { grid: { display: false }, ticks: { color: getVar('--text'), font: { size: 11 } } }
             }
           }
         });
