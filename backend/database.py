@@ -210,9 +210,10 @@ def get_summary(**kwargs):
         cur.execute(f"""
             SELECT
                 COUNT(*) FILTER (WHERE selected_option IS NOT NULL AND is_suggestion = FALSE) AS total_ratings,
-                ROUND(AVG(score) FILTER (WHERE score IS NOT NULL), 3)                        AS avg_score,
-                COUNT(*) FILTER (WHERE selected_option IN ('Very Good','Good'))               AS positive,
-                COUNT(*) FILTER (WHERE selected_option = 'Unsatisfactory')                   AS unsatisfactory,
+                COUNT(*) FILTER (WHERE selected_option = 'Very Good')                         AS very_good,
+                COUNT(*) FILTER (WHERE selected_option = 'Good')                              AS good,
+                COUNT(*) FILTER (WHERE selected_option = 'Satisfactory')                      AS satisfactory,
+                COUNT(*) FILTER (WHERE selected_option = 'Unsatisfactory')                    AS unsatisfactory,
                 COUNT(*) FILTER (WHERE is_suggestion = TRUE AND answer_text IS NOT NULL)      AS total_suggestions,
                 COUNT(DISTINCT faculty_name)                                                  AS faculty_count,
                 COUNT(DISTINCT student_batch)                                                 AS batch_count
@@ -222,7 +223,9 @@ def get_summary(**kwargs):
         row = dict(cur.fetchone())
 
     total = row["total_ratings"] or 0
-    row["positive_pct"]       = round((row["positive"] or 0) / total * 100, 1) if total else 0
+    row["very_good_pct"]      = round((row["very_good"] or 0) / total * 100, 1) if total else 0
+    row["good_pct"]           = round((row["good"] or 0) / total * 100, 1) if total else 0
+    row["satisfactory_pct"]   = round((row["satisfactory"] or 0) / total * 100, 1) if total else 0
     row["unsatisfactory_pct"] = round((row["unsatisfactory"] or 0) / total * 100, 1) if total else 0
     return row
 
