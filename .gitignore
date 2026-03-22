@@ -1,6 +1,17 @@
+# Python
 .venv/
 __pycache__/
-.DS_Store
+*.pyc
+*.pyo
+
+# Environment
 .env
-database_dump.sql
-database_dump.sql
+.env.*
+!.env.example
+
+# Logs
+ngrok.log
+*.log
+
+# OS
+.DS_Store
