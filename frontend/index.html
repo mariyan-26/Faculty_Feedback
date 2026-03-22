@@ -661,7 +661,7 @@
       font-family: 'Playfair Display', serif;
       font-size: 28px;
       line-height: 1;
-      margin-bottom: 2px;
+      margin-bottom: 8px;
     }
 
     .kl {
@@ -1185,9 +1185,10 @@
         <label>Username</label>
         <input type="text" id="lu" placeholder="Enter username" autocomplete="off" />
       </div>
-      <div class="lf">
+      <div class="lf" style="position:relative;">
         <label>Password</label>
-        <input type="password" id="lp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()" />
+        <input type="password" id="lp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()" style="padding-right:40px;" />
+        <span onclick="togglePassword()" id="eyeIcon" title="Show Password" style="position:absolute; right:12px; top:32px; cursor:pointer; filter:grayscale(1); opacity:0.6; user-select:none;">👁️</span>
         <div class="lhint" id="lhint">Admin: user <strong>admin</strong> · pass <strong>admin123</strong></div>
       </div>
       <button class="btn-login" onclick="doLogin()">Sign In →</button>
@@ -1297,32 +1298,32 @@
       <div class="krow" id="kpiRow">
         <div class="kpi">
           <div class="kico">⭐</div>
-          <div class="kv" id="kVG">—</div>
-          <div class="kl" id="klVG">Very Good</div>
+          <div class="kv" id="kVG">Very Good</div>
+          <div class="kl" id="klVG">—</div>
           <div class="kbar">
             <div class="kbf" id="kbVG"></div>
           </div>
         </div>
         <div class="kpi">
           <div class="kico">👍</div>
-          <div class="kv" id="kG">—</div>
-          <div class="kl" id="klG">Good</div>
+          <div class="kv" id="kG">Good</div>
+          <div class="kl" id="klG">—</div>
           <div class="kbar">
             <div class="kbf" id="kbG"></div>
           </div>
         </div>
         <div class="kpi">
           <div class="kico">⚠️</div>
-          <div class="kv" id="kS">—</div>
-          <div class="kl" id="klS">Satisfactory</div>
+          <div class="kv" id="kS">Satisfactory</div>
+          <div class="kl" id="klS">—</div>
           <div class="kbar">
             <div class="kbf" id="kbS"></div>
           </div>
         </div>
         <div class="kpi">
           <div class="kico">💬</div>
-          <div class="kv" id="kU">—</div>
-          <div class="kl" id="klU">Unsatisfactory</div>
+          <div class="kv" id="kU">Unsatisfactory</div>
+          <div class="kl" id="klU">—</div>
           <div class="kbar">
             <div class="kbf" id="kbU"></div>
           </div>
@@ -1431,6 +1432,20 @@
     // ── LOGIN ─────────────────────────────────────────────────────
 
     document.getElementById('themeBtn').textContent = theme === 'light' ? '🌙' : '🌞';
+
+    function togglePassword() {
+      const p = document.getElementById('lp');
+      const eye = document.getElementById('eyeIcon');
+      if (p.type === 'password') {
+        p.type = 'text';
+        eye.textContent = '👁️‍🗨️';
+        eye.title = "Hide Password";
+      } else {
+        p.type = 'password';
+        eye.textContent = '👁️';
+        eye.title = "Show Password";
+      }
+    }
 
     function toggleTheme() {
       theme = theme === 'light' ? 'dark' : 'light';
@@ -1768,20 +1783,20 @@
         const d = await res.json();
         const total = d.total_ratings || 0;
 
-        document.getElementById('kVG').textContent = `${(d.very_good || 0).toLocaleString()} / ${total.toLocaleString()}`;
-        document.getElementById('klVG').textContent = `Very Good (${(d.very_good_pct || 0)}%)`;
+        document.getElementById('kVG').textContent = `Very Good`;
+        document.getElementById('klVG').textContent = `${(d.very_good || 0).toLocaleString()} / ${total.toLocaleString()} (${(d.very_good_pct || 0)}%)`;
         document.getElementById('kbVG').style.width = (d.very_good_pct || 0) + '%';
 
-        document.getElementById('kG').textContent = `${(d.good || 0).toLocaleString()} / ${total.toLocaleString()}`;
-        document.getElementById('klG').textContent = `Good (${(d.good_pct || 0)}%)`;
+        document.getElementById('kG').textContent = `Good`;
+        document.getElementById('klG').textContent = `${(d.good || 0).toLocaleString()} / ${total.toLocaleString()} (${(d.good_pct || 0)}%)`;
         document.getElementById('kbG').style.width = (d.good_pct || 0) + '%';
 
-        document.getElementById('kS').textContent = `${(d.satisfactory || 0).toLocaleString()} / ${total.toLocaleString()}`;
-        document.getElementById('klS').textContent = `Satisfactory (${(d.satisfactory_pct || 0)}%)`;
+        document.getElementById('kS').textContent = `Satisfactory`;
+        document.getElementById('klS').textContent = `${(d.satisfactory || 0).toLocaleString()} / ${total.toLocaleString()} (${(d.satisfactory_pct || 0)}%)`;
         document.getElementById('kbS').style.width = (d.satisfactory_pct || 0) + '%';
 
-        document.getElementById('kU').textContent = `${(d.unsatisfactory || 0).toLocaleString()} / ${total.toLocaleString()}`;
-        document.getElementById('klU').textContent = `Unsatisfactory (${(d.unsatisfactory_pct || 0)}%)`;
+        document.getElementById('kU').textContent = `Unsatisfactory`;
+        document.getElementById('klU').textContent = `${(d.unsatisfactory || 0).toLocaleString()} / ${total.toLocaleString()} (${(d.unsatisfactory_pct || 0)}%)`;
         document.getElementById('kbU').style.width = (d.unsatisfactory_pct || 0) + '%';
       } catch (e) { console.warn('summary error', e); }
     }
