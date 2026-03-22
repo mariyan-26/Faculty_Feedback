@@ -1,0 +1,2724 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Faculty Feedback Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap"
+    rel="stylesheet">
+  <script>
+    let theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    document.documentElement.setAttribute('data-theme', theme);
+  </script>
+  <style>
+    :root {
+      --bg: #080c14;
+      --s1: #0e1420;
+      --s2: #131929;
+      --s3: #192035;
+      --border: transparent;
+      --border2: transparent;
+      --accent: #4f8ef7;
+      --teal: #3dd9c4;
+      --gold: #f7d44f;
+      --red: #f75f5f;
+      --purple: #b47fff;
+      --text: #dce8ff;
+      --muted: #5c7299;
+      --muted2: #3d5278;
+      --vg: #4f8ef7;
+      --g: #3dd9c4;
+      --s: #f7d44f;
+      --u: #f75f5f;
+      --rad: 12px;
+      --rad-sm: 7px;
+      --grid-color: rgba(92, 114, 153, 0.1);
+    }
+
+    [data-theme='light'] {
+      --bg: #f8fafc;
+      --s1: #ffffff;
+      --s2: #f1f5f9;
+      --s3: #e2e8f0;
+      --border: transparent;
+      --border2: transparent;
+      --accent: #2563eb;
+      --teal: #0f766e;
+      --gold: #b45309;
+      --red: #be123c;
+      --purple: #6d28d9;
+      --text: #0f172a;
+      --muted: #475569;
+      --muted2: #64748b;
+      --grid-color: rgba(15, 23, 42, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Sora', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── LOGIN ── */
+    #loginScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+    }
+
+    #loginScreen::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 60% 60% at 50% 40%, rgba(79, 142, 247, .12), transparent 70%);
+      pointer-events: none;
+    }
+
+    .lbox {
+      position: relative;
+      width: 400px;
+      background: var(--s1);
+      border: 1px solid var(--border2);
+      border-radius: 18px;
+      padding: 42px 38px;
+      animation: fadeUp .45s ease;
+    }
+
+    .llogo {
+      text-align: center;
+      margin-bottom: 26px;
+    }
+
+    .llogo .ico {
+      font-size: 34px;
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    .llogo h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 21px;
+    }
+
+    .llogo p {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 3px;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+
+    .rtabs {
+      display: flex;
+      gap: 7px;
+      margin-bottom: 22px;
+      background: var(--s2);
+      border-radius: 7px;
+      padding: 4px;
+    }
+
+    .rtab {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 5px;
+      font-size: 12px;
+      font-family: 'Sora', sans-serif;
+      font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      color: var(--muted);
+      transition: all .2s;
+    }
+
+    .rtab.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .lf {
+      margin-bottom: 15px;
+    }
+
+    .lf label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      margin-bottom: 6px;
+    }
+
+    .lf input {
+      width: 100%;
+      background: var(--s2);
+      border: 1px solid var(--border);
+      border-radius: var(--rad-sm);
+      padding: 11px 13px;
+      font-size: 14px;
+      font-family: 'Sora', sans-serif;
+      color: var(--text);
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    .lf input:focus {
+      border-color: var(--accent);
+    }
+
+    .lhint {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .lhint strong {
+      color: var(--teal);
+    }
+
+    .btn-login {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--rad-sm);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: 'Sora', sans-serif;
+      color: #fff;
+      cursor: pointer;
+      transition: opacity .2s;
+      margin-top: 4px;
+    }
+
+    .btn-login:hover {
+      opacity: .85;
+    }
+
+    .lerr {
+      color: var(--red);
+      font-size: 12px;
+      text-align: center;
+      margin-top: 10px;
+      min-height: 16px;
+    }
+
+    /* ── APP ── */
+    #app {
+      display: none;
+      position: relative;
+      z-index: 1;
+    }
+
+    .topbar {
+      background: var(--s1);
+      border-bottom: 1px solid var(--border);
+      padding: 0 26px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+    }
+
+    .tl-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .tl {
+      font-family: 'Playfair Display', serif;
+      font-size: 17px;
+    }
+
+    .tl em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .rbadge {
+      background: rgba(79, 142, 247, .15);
+      border: 1px solid rgba(79, 142, 247, .3);
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      letter-spacing: .08em;
+    }
+
+    .tr-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .uinfo {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .uinfo strong {
+      color: var(--text);
+    }
+
+    .upload-lbl {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--s2);
+      border: 1px solid var(--border2);
+      border-radius: var(--rad-sm);
+      padding: 7px 13px;
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .2s;
+      font-family: 'Sora', sans-serif;
+      position: relative;
+    }
+
+    .upload-lbl:hover {
+      border-color: var(--teal);
+      color: var(--teal);
+    }
+
+    .upload-lbl input {
+      display: none;
+    }
+
+    .btn-sm {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--rad-sm);
+      padding: 7px 13px;
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+      transition: all .2s;
+    }
+
+    .btn-sm:hover {
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    /* Upload progress */
+    .upbar {
+      background: var(--s2);
+      border-bottom: 1px solid var(--border);
+      padding: 9px 26px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .upbar.show {
+      display: flex;
+    }
+
+    .uptrack {
+      flex: 1;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .upfill {
+      height: 100%;
+      background: var(--teal);
+      border-radius: 2px;
+      transition: width .4s;
+    }
+
+    .upstatus {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* HOD note */
+    .hod-note {
+      background: rgba(247, 148, 79, .08);
+      border: 1px solid rgba(247, 148, 79, .25);
+      border-radius: var(--rad-sm);
+      padding: 9px 15px;
+      font-size: 12px;
+      color: #f7944f;
+      margin-bottom: 14px;
+      display: none;
+    }
+
+    .wrap {
+      max-width: 1340px;
+      margin: 0 auto;
+      padding: 20px 20px;
+    }
+
+    /* ── FILTER BAR ── */
+    .fsec {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: var(--rad);
+      padding: 15px 18px;
+      margin-bottom: 18px;
+    }
+
+    .frow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 11px;
+      align-items: flex-end;
+    }
+
+    .fg {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .fg.wide {
+      min-width: 190px;
+      flex: 2;
+    }
+
+    .fl {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .12em;
+    }
+
+    .fsel,
+    .finp {
+      background: var(--s2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--rad-sm);
+      padding: 8px 11px;
+      font-size: 12px;
+      font-family: 'Sora', sans-serif;
+      outline: none;
+      transition: border-color .2s;
+      width: 100%;
+    }
+
+    .fsel {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 5 5-5' stroke='%235c7299' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 28px;
+    }
+
+    .fsel:focus,
+    .finp:focus {
+      border-color: var(--accent);
+    }
+
+    .fsel option {
+      background: #131929;
+    }
+
+    .fsel:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+
+    /* Searchable batch dropdown */
+    .bsw {
+      position: relative;
+    }
+
+    .bdd {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: var(--s2);
+      border: 1px solid var(--border2);
+      border-radius: var(--rad-sm);
+      max-height: 230px;
+      overflow-y: auto;
+      z-index: 500;
+      display: none;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, .6);
+    }
+
+    .bdd.open {
+      display: block;
+    }
+
+    .bdd::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    .bdd::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .bdd::-webkit-scrollbar-thumb {
+      background: var(--border2);
+    }
+
+    .bdi {
+      padding: 8px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--text);
+      transition: background .12s;
+    }
+
+    .bdi:hover,
+    .bdi.sel {
+      background: rgba(79, 142, 247, .15);
+      color: var(--accent);
+    }
+
+    .bdg {
+      padding: 5px 12px 2px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted2);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      border-top: 1px solid var(--border);
+    }
+
+    .bdg:first-child {
+      border-top: none;
+    }
+
+    .bdi.ao {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .nomatch {
+      padding: 10px 12px;
+      font-size: 12px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .btn-reset {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 8px 14px;
+      border-radius: var(--rad-sm);
+      font-size: 12px;
+      font-family: 'Sora', sans-serif;
+      cursor: pointer;
+      transition: all .2s;
+      align-self: flex-end;
+      white-space: nowrap;
+    }
+
+    .btn-reset:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── FACULTY CARD ── */
+    .fac-card {
+      background: linear-gradient(135deg, rgba(79, 142, 247, .08), rgba(61, 217, 196, .05));
+      border: 1px solid rgba(79, 142, 247, .2);
+      border-radius: var(--rad);
+      padding: 15px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .fav {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--teal));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Playfair Display', serif;
+      font-size: 16px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .fn {
+      font-family: 'Playfair Display', serif;
+      font-size: 17px;
+    }
+
+    .fd {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .ftags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    .ftag {
+      background: rgba(79, 142, 247, .12);
+      border: 1px solid rgba(79, 142, 247, .2);
+      color: var(--accent);
+      border-radius: 20px;
+      padding: 2px 9px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    /* ── KPIS ── */
+    .krow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .kpi {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: var(--rad);
+      padding: 17px 19px;
+      position: relative;
+      overflow: hidden;
+      transition: transform .2s, border-color .2s;
+    }
+
+    .kpi:hover {
+      transform: translateY(-2px);
+      border-color: var(--border2);
+    }
+
+    .kpi::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--kc, var(--accent));
+    }
+
+    .kpi:nth-child(1) {
+      --kc: var(--accent)
+    }
+
+    .kpi:nth-child(2) {
+      --kc: var(--teal)
+    }
+
+    .kpi:nth-child(3) {
+      --kc: var(--gold)
+    }
+
+    .kpi:nth-child(4) {
+      --kc: var(--red)
+    }
+
+    .kpi:nth-child(5) {
+      --kc: var(--purple)
+    }
+
+    .kico {
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .kv {
+      font-family: 'Playfair Display', serif;
+      font-size: 28px;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .kl {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .kbar {
+      height: 2px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-top: 10px;
+    }
+
+    .kbf {
+      height: 100%;
+      border-radius: 2px;
+      background: var(--kc, var(--accent));
+      width: 0%;
+      transition: width 1.2s cubic-bezier(.22, 1, .36, 1);
+    }
+
+    /* ── GRID ── */
+    .g2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    @media(max-width:900px) {
+      .g2 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: var(--rad);
+      padding: 19px;
+      transition: border-color .2s;
+      position: relative;
+    }
+
+    .card:hover {
+      border-color: var(--border2);
+    }
+
+    .ct {
+      font-family: 'Playfair Display', serif;
+      font-size: 15px;
+      margin-bottom: 2px;
+    }
+
+    .cs {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    /* Chart containers — scoped so charts size naturally */
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+    }
+
+    .chart-wrap.donut {
+      height: 220px;
+      max-width: 240px;
+      margin: 0 auto;
+    }
+
+    .chart-wrap.batch {
+      height: 260px;
+    }
+
+    .chart-wrap.trend {
+      display: block;
+    }
+
+    .chart-wrap.subj {
+      display: block;
+    }
+
+    .chart-wrap canvas {
+      display: block;
+      width: 100% !important;
+    }
+
+    /* Donut legend */
+    .dlegend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .dleg {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .dlegd {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .dcount {
+      font-family: 'Playfair Display', serif;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    /* ── QUESTION BREAKDOWN ── */
+    .qlist {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .qh {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+
+    .qn {
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .qsc {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .qtrack {
+      height: 10px;
+      background: var(--s2);
+      border-radius: 5px;
+      display: flex;
+      overflow: visible;
+      gap: 1px;
+      cursor: default;
+      position: relative;
+    }
+
+    .qseg {
+      height: 100%;
+      transition: width 1s cubic-bezier(.22, 1, .36, 1);
+      position: relative;
+    }
+
+    .qseg:first-child {
+      border-radius: 4px 0 0 4px;
+    }
+
+    .qseg:last-child {
+      border-radius: 0 4px 4px 0;
+    }
+
+    /* Inline tooltip */
+    .qtt {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--s3);
+      border: 1px solid var(--border2);
+      border-radius: var(--rad-sm);
+      padding: 10px 13px;
+      font-size: 11px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .15s;
+      z-index: 400;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .6);
+    }
+
+    .qseg:hover .qtt {
+      opacity: 1;
+    }
+
+    .qtt::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: var(--border2);
+    }
+
+    .ttr {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 2px 0;
+    }
+
+    .ttd {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .ttl {
+      color: var(--muted);
+      min-width: 150px;
+    }
+
+    .ttv {
+      font-weight: 600;
+    }
+
+    .ttp {
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    /* ── SUGGESTIONS ── */
+    .sugg-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .sugg-count {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .sugg-count strong {
+      color: var(--text);
+    }
+
+    .sugg-batch-filter {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+
+    .sugg-batch-filter label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+    }
+
+    .sbsel {
+      background: var(--s2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--rad-sm);
+      padding: 6px 10px;
+      font-size: 12px;
+      font-family: 'Sora', sans-serif;
+      outline: none;
+      appearance: none;
+      min-width: 180px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 5 5-5' stroke='%235c7299' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 9px center;
+      padding-right: 26px;
+    }
+
+    .sbsel:focus {
+      border-color: var(--accent);
+    }
+
+    .sbsel option {
+      background: #131929;
+    }
+
+    .slist {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 380px;
+      overflow-y: auto;
+      padding-right: 3px;
+    }
+
+    .slist::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    .slist::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .slist::-webkit-scrollbar-thumb {
+      background: var(--border2);
+    }
+
+    .scard {
+      background: var(--s2);
+      border: 1px solid var(--border);
+      border-radius: var(--rad-sm);
+      padding: 10px 13px 10px 18px;
+      font-size: 12px;
+      line-height: 1.55;
+      position: relative;
+    }
+
+    .scard::before {
+      content: '"';
+      position: absolute;
+      left: 6px;
+      top: 8px;
+      font-family: 'Playfair Display', serif;
+      font-size: 15px;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .smeta {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+
+    .stag {
+      font-size: 10px;
+      color: var(--muted);
+      background: var(--s3);
+      border-radius: 10px;
+      padding: 2px 7px;
+    }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      margin-top: 10px;
+    }
+
+    .pagination button {
+      background: var(--s2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: var(--rad-sm);
+      font-size: 12px;
+      cursor: pointer;
+      font-family: 'Sora', sans-serif;
+      transition: all .2s;
+    }
+
+    .pagination button:hover:disabled {
+      border-color: var(--border);
+      color: var(--text);
+    }
+
+    .pagination button:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .pagination button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .page-info {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .nodata {
+      text-align: center;
+      color: var(--muted);
+      padding: 28px;
+      font-size: 13px;
+    }
+
+    /* Loading states */
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(8, 12, 20, .7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--rad);
+      z-index: 10;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    /* Radar chart */
+    .radar-wrap {
+      position: relative;
+      width: 100%;
+    }
+
+    .radar-wrap canvas {
+      display: block;
+      width: 100% !important;
+    }
+
+    /* Mobile & Tab */
+    @media (max-width: 768px) {
+      .frow {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+      }
+
+      .fg,
+      .fg.wide {
+        min-width: 100%;
+        width: 100%;
+      }
+
+      .btn-reset {
+        width: 100%;
+        margin-top: 5px;
+      }
+
+      .topbar {
+        flex-direction: column;
+        height: auto;
+        padding: 14px 20px;
+        gap: 12px;
+      }
+
+      .tl-wrap {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .tr-wrap {
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+      }
+
+      .krow {
+        grid-template-columns: 1fr;
+      }
+
+      .fac-card {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+      }
+
+      .chart-wrap.donut {
+        max-width: 100%;
+      }
+
+      .dlegend {
+        justify-content: center;
+      }
+
+      .wrap {
+        padding: 15px 12px;
+      }
+    }
+
+    .tab-btn {
+      background: var(--s3);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      padding: 10px 24px;
+      border-radius: 30px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: 0.3s;
+    }
+
+    .tab-btn.active {
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 4px 15px rgba(79, 142, 247, 0.4);
+    }
+
+    /* Styling for the Institutional Filter Bar */
+    #section-institution .filter-bar {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: var(--s2);
+      border-radius: 12px;
+      border: 1px solid var(--s3);
+    }
+
+    #section-institution select {
+      flex: 1;
+      background: var(--s3);
+      color: var(--text);
+      border: 1px solid var(--border2);
+      padding: 8px 12px;
+      border-radius: 6px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    #section-institution select:hover {
+      border-color: var(--accent);
+    }
+
+    #inst-suggestions-content,
+    #suggestions-content {
+      min-height: 100px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .suggestion-item:hover {
+      background: rgba(79, 142, 247, 0.05);
+      border-radius: 8px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ══ LOGIN ══ -->
+  <div id="loginScreen">
+    <div class="lbox">
+      <div class="llogo">
+        <span class="ico">🎓</span>
+        <h2>Feedback <em style="font-style:italic;color:var(--accent)">Portal</em></h2>
+        <p>Faculty Evaluation System</p>
+      </div>
+
+      <div class="lf">
+        <label>Username</label>
+        <input type="text" id="lu" placeholder="Enter username" autocomplete="off" />
+      </div>
+      <div class="lf" style="position:relative;">
+        <label>Password</label>
+        <input type="password" id="lp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()"
+          style="padding-right:40px;" />
+        <span onclick="togglePassword()" id="eyeIcon" title="Show Password"
+          style="position:absolute; right:12px; top:32px; cursor:pointer; filter:grayscale(1); opacity:0.6; user-select:none;">👁️</span>
+        <div class="lhint" id="lhint">Admin: user <strong>admin</strong> · pass <strong>admin123</strong></div>
+      </div>
+      <button class="btn-login" onclick="doLogin()">Sign In →</button>
+      <div class="lerr" id="lerr"></div>
+    </div>
+  </div>
+
+  <!-- ══ APP ══ -->
+  <div id="app">
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="tl-wrap">
+        <div class="tl">Faculty <em>Insights</em></div>
+        <div class="rbadge" id="rbadge">ADMIN</div>
+      </div>
+      <div class="tr-wrap">
+        <button class="btn-sm theme-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle Light/Dark Theme"
+          style="background:transparent;border:1px solid var(--border);color:var(--text);font-size:16px;cursor:pointer;padding:6px 10px;border-radius:6px;display:flex;align-items:center;">🌙</button>
+        <div class="uinfo">Signed in as <strong id="tuser">—</strong></div>
+        <label class="upload-lbl" title="Upload CSV to load data">
+          📂 Upload CSV
+          <input type="file" accept=".csv" onchange="uploadCSV(this)" />
+        </label>
+        <button class="btn-sm" onclick="logout()">Sign out</button>
+      </div>
+    </div>
+    <div class="upbar" id="upbar">
+      <div class="uptrack">
+        <div class="upfill" id="upfill" style="width:0%"></div>
+      </div>
+      <div class="upstatus" id="upstatus">Processing…</div>
+    </div>
+
+    <div style="display: flex; gap: 10px; margin: 0 20px 20px 20px;">
+      <button id="tab-fac" class="tab-btn active" onclick="switchTab('faculty')">Faculty Performance</button>
+      <button id="tab-inst" class="tab-btn" onclick="switchTab('institution')">University & Dept</button>
+    </div>
+
+    <div id="section-faculty">
+      <div class="wrap">
+        <div class="hod-note" id="hodnote">🔒 Viewing data scoped to your department only.</div>
+
+        <!-- FILTERS -->
+        <div class="fsec">
+          <div class="frow">
+            <div class="fg">
+              <div class="fl">School</div>
+              <select class="fsel" id="fSch" onchange="onSchChange()">
+                <option value="">All Schools</option>
+              </select>
+            </div>
+            <div class="fg">
+              <div class="fl">Department</div>
+              <select class="fsel" id="fDep" onchange="onDepChange()">
+                <option value="">All Departments</option>
+              </select>
+            </div>
+            <div class="fg wide">
+              <div class="fl">Faculty</div>
+              <div class="bsw" id="fsw">
+                <input class="finp" type="text" id="fac_si" placeholder="Search faculty…" autocomplete="off"
+                  onfocus="openFDD()" oninput="filterFDD(this.value)" onkeydown="if(event.key==='Escape')closeFDD()" />
+                <div class="bdd" id="fdd"></div>
+              </div>
+            </div>
+            <div class="fg">
+              <div class="fl">Year</div>
+              <select class="fsel" id="fYr" onchange="onYrChange()">
+                <option value="">All Years</option>
+              </select>
+            </div>
+            <div class="fg wide">
+              <div class="fl">Programme</div>
+              <div class="bsw" id="psw">
+                <input class="finp" type="text" id="pro_si" placeholder="Search programme…" autocomplete="off"
+                  onfocus="openPDD()" oninput="filterPDD(this.value)" onkeydown="if(event.key==='Escape')closePDD()" />
+                <div class="bdd" id="pdd"></div>
+              </div>
+            </div>
+            <div class="fg wide">
+              <div class="fl">Batch</div>
+              <div class="bsw" id="bsw">
+                <input class="finp" type="text" id="bsi" placeholder="Search or select batch…" autocomplete="off"
+                  onfocus="openBDD()" oninput="filterBDD(this.value)" onkeydown="if(event.key==='Escape')closeBDD()" />
+                <div class="bdd" id="bdd"></div>
+              </div>
+            </div>
+            <div class="fg">
+              <div class="fl">Rating</div>
+              <select class="fsel" id="fRat" onchange="applyFilters()">
+                <option value="">All Ratings</option>
+                <option>Very Good</option>
+                <option>Good</option>
+                <option>Satisfactory</option>
+                <option>Unsatisfactory</option>
+              </select>
+            </div>
+            <button class="btn-reset" onclick="resetFilters()">↺ Reset</button>
+          </div>
+        </div>
+
+        <!-- FACULTY CARD -->
+        <div class="fac-card" id="facCard">
+          <div class="fav" id="facAv">✦</div>
+          <div>
+            <div class="fn" id="facName">All Faculty</div>
+            <div class="fd" id="facDept">—</div>
+            <div class="ftags" id="facTags"></div>
+          </div>
+        </div>
+
+        <!-- KPIS -->
+        <div class="krow" id="kpiRow">
+          <div class="kpi">
+            <div class="kico">⭐</div>
+            <div class="kv" id="kVG">Very Good</div>
+            <div class="kl" id="klVG">—</div>
+            <div class="kbar">
+              <div class="kbf" id="kbVG"></div>
+            </div>
+          </div>
+          <div class="kpi">
+            <div class="kico">👍</div>
+            <div class="kv" id="kG">Good</div>
+            <div class="kl" id="klG">—</div>
+            <div class="kbar">
+              <div class="kbf" id="kbG"></div>
+            </div>
+          </div>
+          <div class="kpi">
+            <div class="kico">⚠️</div>
+            <div class="kv" id="kS">Satisfactory</div>
+            <div class="kl" id="klS">—</div>
+            <div class="kbar">
+              <div class="kbf" id="kbS"></div>
+            </div>
+          </div>
+          <div class="kpi">
+            <div class="kico">💬</div>
+            <div class="kv" id="kU">Unsatisfactory</div>
+            <div class="kl" id="klU">—</div>
+            <div class="kbar">
+              <div class="kbf" id="kbU"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROW 1: Donut + Batch stacked -->
+        <div class="g2">
+          <div class="card" id="cardDonut">
+            <div class="ct">Overall Rating Distribution</div>
+            <div class="cs">Across all filtered responses</div>
+            <div class="chart-wrap donut"><canvas id="cDonut"></canvas></div>
+            <div class="dlegend" id="dlegend"></div>
+          </div>
+          <div class="card" id="cardBatch">
+            <div class="ct">Ratings by Batch</div>
+            <div class="cs">Stacked count per student batch</div>
+            <div class="chart-wrap batch"><canvas id="cBatch"></canvas></div>
+          </div>
+        </div>
+
+        <!-- ROW 2: Trend (horizontal bar) + Subject -->
+        <div class="g2">
+          <div class="card" id="cardTrend">
+            <div class="ct">Score Trend — Top Batches</div>
+            <div class="cs">Avg satisfaction score per batch (horizontal bar, top 15 by volume)</div>
+            <div class="chart-wrap trend" id="wrapTrend"><canvas id="cTrend"></canvas></div>
+          </div>
+          <div class="card" id="cardSubj">
+            <div class="ct">Performance by Subject</div>
+            <div class="cs">Average score per subject taught</div>
+            <div class="chart-wrap subj" id="wrapSubj"><canvas id="cSubj"></canvas></div>
+          </div>
+        </div>
+
+        <!-- ROW 3: Question breakdown -->
+        <div class="card" style="margin-bottom:14px;" id="cardQ">
+          <div class="ct">Question-wise Feedback Breakdown</div>
+          <div class="cs">Hover any bar for exact counts · 10 evaluation criteria</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:13px;">
+            <div class="dleg">
+              <div class="dlegd" style="background:var(--vg)"></div>Very Good
+            </div>
+            <div class="dleg">
+              <div class="dlegd" style="background:var(--g)"></div>Good
+            </div>
+            <div class="dleg">
+              <div class="dlegd" style="background:var(--s)"></div>Satisfactory
+            </div>
+            <div class="dleg">
+              <div class="dlegd" style="background:var(--u)"></div>Unsatisfactory
+            </div>
+          </div>
+          <div class="qlist" id="qlist"></div>
+        </div>
+
+        <!-- ROW 4: Suggestions -->
+        <div class="card" id="cardSugg" style="margin-bottom:14px;">
+          <div class="ct">Student Suggestions</div>
+          <div class="sugg-header">
+            <div class="sugg-count" id="suggCount">—</div>
+            <div class="sugg-batch-filter">
+              <label>Filter batch</label>
+              <select class="sbsel" id="suggBatchSel" onchange="loadSuggestions(true)">
+                <option value="">All Batches</option>
+              </select>
+            </div>
+          </div>
+          <div class="slist" id="slist"></div>
+          <div class="pagination" id="suggPagination" style="display:none">
+            <button id="suggPrevBtn" onclick="changeSuggPage(-1)">← Prev</button>
+            <span class="page-info" id="suggPageInfo">Page 1</span>
+            <button id="suggNextBtn" onclick="changeSuggPage(1)">Next →</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- INSTITUTIONAL DATA -->
+    <div id="section-institution" style="display:none; padding: 0 20px;">
+      <div class="card" style="margin-bottom: 20px; padding: 15px;">
+        <div
+          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; align-items: end;">
+
+          <div class="filter-item">
+            <label
+              style="font-size: 0.7em; color: var(--text-dim); display: block; margin-bottom: 5px; letter-spacing: 1px;">SCHOOL</label>
+            <select id="inst-school-filter" onchange="loadInstitutionalData()"
+              style="width: 100%; height: 40px;"></select>
+          </div>
+
+          <div class="filter-item">
+            <label
+              style="font-size: 0.7em; color: var(--text-dim); display: block; margin-bottom: 5px; letter-spacing: 1px;">DEPARTMENT</label>
+            <select id="inst-dept-filter" onchange="loadInstitutionalData()"
+              style="width: 100%; height: 40px;"></select>
+          </div>
+
+          <div class="filter-item">
+            <label
+              style="font-size: 0.7em; color: var(--text-dim); display: block; margin-bottom: 5px; letter-spacing: 1px;">BATCH</label>
+            <select id="inst-batch-filter" onchange="loadInstitutionalData()"
+              style="width: 100%; height: 40px;"></select>
+          </div>
+
+          <div class="filter-item">
+            <button class="btn-reset" onclick="resetInstFilters()"
+              style="width: 100%; height: 40px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <span>↺</span> Reset
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      <div
+        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px;">
+        <div class="card" style="text-align: center; padding: 20px;">
+          <div style="font-size: 0.8em; color: var(--text-dim); margin-bottom: 10px; letter-spacing: 1px;">AVERAGE SCORE
+          </div>
+          <div style="font-size: 2.5em; font-weight: 700; color: var(--accent);">
+            <span id="inst-avg-score">0.00</span><span
+              style="font-size: 0.4em; color: var(--text-dim); margin-left: 5px;">/ 5</span>
+          </div>
+        </div>
+        <div class="card"
+          style="text-align: center; padding: 20px; border: 1px solid var(--s3); background: var(--card-bg);">
+          <div
+            style="font-size: 0.7em; color: var(--text-dim); margin-bottom: 10px; letter-spacing: 1px; font-weight: 600;">
+            TOTAL RESPONSES
+          </div>
+          <div id="inst-total-responses" style="font-size: 2.5em; font-weight: 800; color: var(--accent);">
+            0
+          </div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px; margin-bottom: 20px;">
+        <div class="card" style="text-align: center; padding: 20px;">
+          <h3
+            style="color:var(--accent); font-size: 0.85em; margin-bottom: 20px; text-align: left; letter-spacing: 1px;">
+            OVERALL ANALYSIS</h3>
+          <div style="height: 220px; position: relative;">
+            <canvas id="instDonutChart"></canvas>
+          </div>
+        </div>
+        <div class="card" style="padding: 20px;">
+          <h3 style="color:var(--accent); font-size: 0.85em; margin-bottom: 20px; letter-spacing: 1px;">RATING
+            DISTRIBUTION</h3>
+          <div id="inst-rating-distribution"
+            style="display: flex; flex-direction: column; gap: 12px; padding-top: 10px;"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:20px; position: relative;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h3 style="color:var(--accent); margin: 0;">Institutional Feedback Overview</h3>
+            <button onclick="toggleInstQuestions()"
+              style="background: rgba(79, 142, 247, 0.1); border: 1px solid var(--accent); color: var(--accent); border-radius: 50%; width: 24px; height: 24px; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: 0.3s;"
+              title="Click to see full questions">i</button>
+          </div>
+        </div>
+
+        <p style="font-size:0.8em; color:var(--text-dim); margin-bottom:20px;">Average scores for university-wide
+          facilities and curriculum.</p>
+
+        <div id="inst-questions-overlay" style="display:none; 
+            position: absolute; 
+            top: 65px; 
+            left: 20px; 
+            right: 20px; 
+            background: var(--card-bg, #ffffff); /* Fallback to pure white */
+            color: var(--text, #333333);         /* Fallback to dark gray */
+            border: 1px solid var(--s3); 
+            padding: 20px; 
+            border-radius: 12px; 
+            z-index: 1000; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            /* This ensures nothing behind it shows through */
+            opacity: 1 !important;">
+
+          <div
+            style="display:flex; justify-content:space-between; align-items: center; margin-bottom:15px; border-bottom: 1px solid var(--s3); padding-bottom: 10px;">
+            <strong style="font-size: 0.85em; color: var(--accent); letter-spacing: 1px;">
+              QUESTION MAPPING
+            </strong>
+            <span onclick="toggleInstQuestions()"
+              style="cursor:pointer; color: var(--text-dim); font-size: 22px; line-height: 1;">
+              &times;
+            </span>
+          </div>
+
+          <div id="inst-questions-list"
+            style="font-size: 0.85em; line-height: 1.6; max-height: 350px; overflow-y: auto;">
+          </div>
+        </div>
+
+        <div style="height: 480px;">
+          <canvas id="instChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="color:var(--accent)">Institutional Suggestions</h3>
+        <div id="inst-suggestions-content" style="max-height:500px; overflow-y:auto; min-height: 150px;"></div>
+      </div>
+    </div>
+    <!-- /app -->
+
+    <script>
+      // ── CONFIG ────────────────────────────────────────────────────
+      const API = '/api';
+
+      // ── STATE ─────────────────────────────────────────────────────
+      let SESSION = null;
+      let FILTERS = {};          // available options from backend
+      let F = {};                // active filter values
+      let selectedBatch = '';
+      let selectedFac = '';
+      let selectedPro = '';
+      let suggPage = 1;
+      let suggTotal = 0;
+      const LIMIT = 10;
+      let charts = {};
+
+      const COLORS = {
+        'Very Good': '#4f8ef7', 'Good': '#3dd9c4',
+        'Satisfactory': '#f7d44f', 'Unsatisfactory': '#f75f5f',
+      };
+      const RATINGS = ['Very Good', 'Good', 'Satisfactory', 'Unsatisfactory'];
+
+      const getVar = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+      Chart.defaults.color = getVar('--muted');
+      Chart.defaults.scale.grid.color = getVar('--grid-color');
+
+      // ── LOGIN ─────────────────────────────────────────────────────
+
+      document.getElementById('themeBtn').textContent = theme === 'light' ? '🌙' : '🌞';
+
+      function togglePassword() {
+        const p = document.getElementById('lp');
+        const eye = document.getElementById('eyeIcon');
+        if (p.type === 'password') {
+          p.type = 'text';
+          eye.textContent = '👁️‍🗨️';
+          eye.title = "Hide Password";
+        } else {
+          p.type = 'password';
+          eye.textContent = '👁️';
+          eye.title = "Show Password";
+        }
+      }
+
+      function toggleTheme() {
+        theme = theme === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+        document.getElementById('themeBtn').textContent = theme === 'light' ? '🌙' : '🌞';
+        Chart.defaults.color = getVar('--muted');
+        Chart.defaults.scale.grid.color = getVar('--grid-color');
+        renderAll();
+      }
+
+
+      async function doLogin() {
+        const u = document.getElementById('lu').value.trim();
+        const p = document.getElementById('lp').value.trim();
+        try {
+          const res = await fetch(`${API}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: u, passcode: p }),
+          });
+          if (!res.ok) { document.getElementById('lerr').textContent = 'Invalid credentials'; return; }
+          SESSION = await res.json();
+          localStorage.setItem('faculty_session', JSON.stringify(SESSION));
+          document.getElementById('loginScreen').style.display = 'none';
+          document.getElementById('app').style.display = 'block';
+          document.getElementById('rbadge').textContent = (SESSION.label || '').toUpperCase();
+          document.getElementById('tuser').textContent = SESSION.username;
+          if (SESSION.role === 'hod') {
+            document.getElementById('hodnote').style.display = 'block';
+            document.getElementById('hodnote').textContent = '🔒 Viewing data scoped to your department only.';
+            document.getElementById('fSch').disabled = true;
+            document.getElementById('fDep').disabled = true;
+          } else if (SESSION.role === 'dean') {
+            document.getElementById('hodnote').style.display = 'block';
+            document.getElementById('hodnote').textContent = '🔒 Viewing data scoped to your school only.';
+            document.getElementById('fSch').disabled = true;
+          }
+
+          // Hide upload functionality for users missing upload permission
+          document.querySelector('.upload-lbl').style.display = SESSION.upload ? 'flex' : 'none';
+
+          await loadFilters();
+          renderAll();
+        } catch (e) {
+          document.getElementById('lerr').textContent = 'Cannot connect to server. Is the backend running?';
+        }
+      }
+
+      function logout() {
+        SESSION = null; F = {}; selectedBatch = ''; selectedFac = ''; selectedPro = '';
+        localStorage.removeItem('faculty_session');
+        document.cookie.split(";").forEach(c => document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"));
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('lu').value = '';
+        document.getElementById('lp').value = '';
+        document.getElementById('lerr').textContent = '';
+        document.querySelectorAll('.rtab').forEach((t, i) => t.classList.toggle('active', i === 0));
+        document.getElementById('fSch').disabled = false;
+        document.getElementById('fDep').disabled = false;
+        document.getElementById('hodnote').style.display = 'none';
+      }
+
+      // Auto-login if session exists
+      document.addEventListener('DOMContentLoaded', async () => {
+        const saved = localStorage.getItem('faculty_session');
+        if (saved) {
+          try {
+            SESSION = JSON.parse(saved);
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('app').style.display = 'block';
+            document.getElementById('rbadge').textContent = (SESSION.label || '').toUpperCase();
+            document.getElementById('tuser').textContent = SESSION.username;
+            if (SESSION.role === 'hod') {
+              document.getElementById('hodnote').style.display = 'block';
+              document.getElementById('hodnote').textContent = '🔒 Viewing data scoped to your department only.';
+              document.getElementById('fSch').disabled = true;
+              document.getElementById('fDep').disabled = true;
+            } else if (SESSION.role === 'dean') {
+              document.getElementById('hodnote').style.display = 'block';
+              document.getElementById('hodnote').textContent = '🔒 Viewing data scoped to your school only.';
+              document.getElementById('fSch').disabled = true;
+            }
+            document.querySelector('.upload-lbl').style.display = SESSION.upload ? 'flex' : 'none';
+            await loadFilters();
+            renderAll();
+          } catch (e) {
+            localStorage.removeItem('faculty_session');
+          }
+        }
+      });
+
+      // ── FILTERS ───────────────────────────────────────────────────
+      async function loadFilters() {
+        const params = new URLSearchParams({ role: SESSION.role });
+        if (SESSION.dept) params.set('dept', SESSION.dept);
+        if (SESSION.school) params.set('school', SESSION.school);
+        const res = await fetch(`${API}/filters?${params}`);
+        FILTERS = await res.json();
+        FILTERS.valid_batches = FILTERS.batches;
+        populateFilterUI();
+      }
+
+      function populateFilterUI() {
+        // Schools
+        const sEl = document.getElementById('fSch');
+        sEl.innerHTML = '<option value="">All Schools</option>';
+        FILTERS.schools.forEach(s => sEl.innerHTML += `<option value="${esc(s)}">${s.replace('SCHOOL OF ', '')}</option>`);
+
+        // Depts
+        fillDepts();
+
+        // Years
+        const yEl = document.getElementById('fYr');
+        yEl.innerHTML = '<option value="">All Years</option>';
+        FILTERS.years.forEach(y => yEl.innerHTML += `<option value="${esc(y)}">${y}</option>`);
+
+        // Build searchable dropdowns
+        renderFDD('');
+        renderPDD('');
+        renderBDD('');
+
+        // HOD lock
+        if (SESSION.role === 'hod' && SESSION.dept) {
+          document.getElementById('fDep').value = SESSION.dept;
+          F.dept = SESSION.dept;
+          renderFDD('');
+        } else if (SESSION.role === 'dean' && SESSION.school) {
+          document.getElementById('fSch').value = SESSION.school;
+          F.school = SESSION.school;
+          fillDepts();
+          renderFDD('');
+        }
+      }
+
+      function fillDepts() {
+        const school = document.getElementById('fSch').value;
+        const dEl = document.getElementById('fDep');
+        dEl.innerHTML = '<option value="">All Departments</option>';
+        let depts = FILTERS.departments || [];
+        if (school) depts = depts.filter(d => FILTERS.faculty.some(f => f.faculty_dept === d && f.faculty_school === school));
+        depts.forEach(d => dEl.innerHTML += `<option value="${esc(d)}">${d.replace('DEPARTMENT OF ', '')}</option>`);
+        if (SESSION?.role === 'hod' && SESSION.dept) dEl.value = SESSION.dept;
+      }
+
+      // Searchable Faculty
+      function renderFDD(search) {
+        const dd = document.getElementById('fdd');
+        let facs = FILTERS.valid_faculty || FILTERS.faculty || [];
+        if (search) facs = facs.filter(x => (x.faculty_name || '').toLowerCase().includes(search.toLowerCase()));
+        if (!facs.length) { dd.innerHTML = '<div class="nomatch">No faculty found</div>'; return; }
+        let html = `<div class="bdi ao${!selectedFac ? ' sel' : ''}" onclick="selFac('')">All Faculty</div>`;
+        facs.forEach(f => {
+          const s = selectedFac === f.faculty_name ? ' sel' : '';
+          const safe = (f.faculty_name || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+          html += `<div class="bdi${s}" onclick="selFac('${safe.replace(/'/g, "\\'")}')"> ${f.faculty_name}</div>`;
+        });
+        dd.innerHTML = html;
+      }
+      function selFac(val) { selectedFac = val; document.getElementById('fac_si').value = val; closeFDD(); updateDependentDropdowns(); applyFilters(); }
+      function openFDD() { document.getElementById('fdd').classList.add('open'); renderFDD(document.getElementById('fac_si').value); }
+      function closeFDD() { document.getElementById('fdd').classList.remove('open'); }
+      function filterFDD(v) { document.getElementById('fdd').classList.add('open'); renderFDD(v); }
+
+      // Searchable Programme
+      function renderPDD(search) {
+        const dd = document.getElementById('pdd');
+        let pros = FILTERS.valid_programmes || FILTERS.programmes || [];
+        if (search) pros = pros.filter(x => (x || '').toLowerCase().includes(search.toLowerCase()));
+        if (!pros.length) { dd.innerHTML = '<div class="nomatch">No programmes found</div>'; return; }
+        let html = `<div class="bdi ao${!selectedPro ? ' sel' : ''}" onclick="selPro('')">All Programmes</div>`;
+        pros.forEach(p => {
+          const s = selectedPro === p ? ' sel' : '';
+          const safe = (p || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+          html += `<div class="bdi${s}" onclick="selPro('${safe.replace(/'/g, "\\'")}')"> ${p}</div>`;
+        });
+        dd.innerHTML = html;
+      }
+      function selPro(val) { selectedPro = val; document.getElementById('pro_si').value = val; closePDD(); updateDependentDropdowns(); applyFilters(); }
+      function openPDD() { document.getElementById('pdd').classList.add('open'); renderPDD(document.getElementById('pro_si').value); }
+      function closePDD() { document.getElementById('pdd').classList.remove('open'); }
+      function filterPDD(v) { document.getElementById('pdd').classList.add('open'); renderPDD(v); }
+
+      function getAvailBatches(search = '') {
+        let b = FILTERS.valid_batches || FILTERS.batches || [];
+        if (search) b = b.filter(x => (x.student_batch || '').toLowerCase().includes(search.toLowerCase()));
+        return b;
+      }
+
+      function renderBDD(search) {
+        const dd = document.getElementById('bdd');
+        const batches = getAvailBatches(search);
+        if (!batches.length) { dd.innerHTML = '<div class="nomatch">No batches found</div>'; return; }
+        const byYear = {};
+        batches.forEach(b => { (byYear[b.batch_year || 'Unknown'] = byYear[b.batch_year || 'Unknown'] || []).push(b); });
+        let html = `<div class="bdi ao${!selectedBatch ? ' sel' : ''}" onclick="selBatch('')">All Batches</div>`;
+        Object.keys(byYear).sort().forEach(yr => {
+          html += `<div class="bdg">${yr}</div>`;
+          byYear[yr].forEach(b => {
+            const s = selectedBatch === b.student_batch ? ' sel' : '';
+            const safe = (b.student_batch || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+            html += `<div class="bdi${s}" onclick="selBatch('${safe.replace(/'/g, "\\'")}')"> ${b.student_batch}</div>`;
+          });
+        });
+        dd.innerHTML = html;
+      }
+
+      function selBatch(val) { selectedBatch = val; document.getElementById('bsi').value = val; closeBDD(); applyFilters(); }
+      function openBDD() { document.getElementById('bdd').classList.add('open'); renderBDD(document.getElementById('bsi').value); }
+      function closeBDD() { document.getElementById('bdd').classList.remove('open'); }
+      function filterBDD(v) { document.getElementById('bdd').classList.add('open'); renderBDD(v); }
+
+      document.addEventListener('click', e => {
+        if (!document.getElementById('bsw').contains(e.target)) closeBDD();
+        if (!document.getElementById('fsw').contains(e.target)) closeFDD();
+        if (!document.getElementById('psw').contains(e.target)) closePDD();
+      });
+
+      async function updateDependentDropdowns() {
+        const f = getF();
+        const p = new URLSearchParams();
+        if (f.school) p.set('school', f.school);
+        if (f.dept) p.set('dept', f.dept);
+        if (f.faculty) p.set('faculty', f.faculty);
+        if (f.year) p.set('year', f.year);
+        if (f.programme) p.set('programme', f.programme);
+        p.set('role', f.role);
+        try {
+          const res = await fetch(`${API}/filters?${p}`);
+          const data = await res.json();
+          FILTERS.valid_batches = data.batches || [];
+          FILTERS.valid_faculty = data.faculty || [];
+          FILTERS.valid_programmes = data.programmes || [];
+
+          const yEl = document.getElementById('fYr');
+          const currYear = yEl.value;
+          yEl.innerHTML = '<option value="">All Years</option>';
+          (data.years || []).forEach(y => yEl.innerHTML += `<option value="${esc(y)}">${y}</option>`);
+          if (currYear && (data.years || []).includes(currYear)) yEl.value = currYear;
+
+          renderBDD(document.getElementById('bsi').value);
+          renderFDD(document.getElementById('fac_si').value);
+          renderPDD(document.getElementById('pro_si').value);
+        } catch (e) { console.warn(e); }
+      }
+
+      async function onSchChange() {
+        selectedFac = ''; document.getElementById('fac_si').value = '';
+        selectedPro = ''; document.getElementById('pro_si').value = '';
+        selectedBatch = ''; document.getElementById('bsi').value = '';
+        fillDepts(); await updateDependentDropdowns(); applyFilters();
+      }
+      async function onDepChange() {
+        selectedFac = ''; document.getElementById('fac_si').value = '';
+        selectedPro = ''; document.getElementById('pro_si').value = '';
+        selectedBatch = ''; document.getElementById('bsi').value = '';
+        await updateDependentDropdowns(); applyFilters();
+      }
+      async function onYrChange() {
+        selectedBatch = ''; document.getElementById('bsi').value = '';
+        await updateDependentDropdowns(); applyFilters();
+      }
+
+      function getF() {
+        return {
+          role: SESSION?.role || 'admin',
+          dept: SESSION?.role === 'hod' ? SESSION.dept : (document.getElementById('fDep').value || ''),
+          school: SESSION?.role === 'dean' ? SESSION.school : (document.getElementById('fSch').value || ''),
+          faculty: selectedFac || '',
+          year: document.getElementById('fYr').value || '',
+          programme: selectedPro || '',
+          batch: selectedBatch || '',
+          rating: document.getElementById('fRat').value || '',
+        };
+      }
+
+      function applyFilters() { renderAll(); }
+
+      async function resetFilters() {
+        selectedBatch = ''; selectedFac = ''; selectedPro = '';
+        ['fYr', 'fRat'].forEach(id => document.getElementById(id).value = '');
+
+        if (SESSION?.role !== 'dean') {
+          document.getElementById('fSch').value = '';
+        }
+
+        document.getElementById('fDep').value = (SESSION?.role === 'hod' && SESSION.dept) ? SESSION.dept : '';
+        document.getElementById('bsi').value = '';
+        document.getElementById('fac_si').value = '';
+        document.getElementById('pro_si').value = '';
+        closeBDD(); closeFDD(); closePDD();
+        fillDepts();
+        await updateDependentDropdowns();
+        applyFilters();
+      }
+
+      // ── RENDER ALL ────────────────────────────────────────────────
+      function renderAll() {
+        loadSummary();
+        loadDonut();
+        loadBatchChart();
+        loadTrend();
+        loadSubject();
+        loadQuestions();
+        loadSuggestions(true);
+        loadFacultyCard();
+      }
+
+      // ── API HELPERS ───────────────────────────────────────────────
+      function buildQS(extras = {}) {
+        const f = getF();
+        const p = new URLSearchParams();
+        Object.entries({ ...f, ...extras }).forEach(([k, v]) => { if (v) p.set(k, v); });
+        return p.toString();
+      }
+
+      function setLoading(cardId, show) {
+        const card = document.getElementById(cardId);
+        const existing = card.querySelector('.loading-overlay');
+        if (show && !existing) {
+          const d = document.createElement('div');
+          d.className = 'loading-overlay';
+          d.innerHTML = '<div class="spinner"></div> Loading…';
+          card.appendChild(d);
+        } else if (!show && existing) {
+          existing.remove();
+        }
+      }
+
+      // ── SUMMARY / KPIS ────────────────────────────────────────────
+      async function loadSummary() {
+        try {
+          const res = await fetch(`${API}/summary?${buildQS()}`);
+          const d = await res.json();
+          const total = d.total_ratings || 0;
+
+          document.getElementById('kVG').textContent = `Very Good`;
+          document.getElementById('klVG').textContent = `${(d.very_good || 0).toLocaleString()} / ${total.toLocaleString()} (${(d.very_good_pct || 0)}%)`;
+          document.getElementById('kbVG').style.width = (d.very_good_pct || 0) + '%';
+
+          document.getElementById('kG').textContent = `Good`;
+          document.getElementById('klG').textContent = `${(d.good || 0).toLocaleString()} / ${total.toLocaleString()} (${(d.good_pct || 0)}%)`;
+          document.getElementById('kbG').style.width = (d.good_pct || 0) + '%';
+
+          document.getElementById('kS').textContent = `Satisfactory`;
+          document.getElementById('klS').textContent = `${(d.satisfactory || 0).toLocaleString()} / ${total.toLocaleString()} (${(d.satisfactory_pct || 0)}%)`;
+          document.getElementById('kbS').style.width = (d.satisfactory_pct || 0) + '%';
+
+          document.getElementById('kU').textContent = `Unsatisfactory`;
+          document.getElementById('klU').textContent = `${(d.unsatisfactory || 0).toLocaleString()} / ${total.toLocaleString()} (${(d.unsatisfactory_pct || 0)}%)`;
+          document.getElementById('kbU').style.width = (d.unsatisfactory_pct || 0) + '%';
+        } catch (e) { console.warn('summary error', e); }
+      }
+
+      // ── FACULTY CARD ──────────────────────────────────────────────
+      async function loadFacultyCard() {
+        const facV = selectedFac;
+        const depV = document.getElementById('fDep').value;
+        const schV = document.getElementById('fSch').value;
+
+        if (!facV) {
+          document.getElementById('facAv').textContent = '✦';
+          document.getElementById('facName').textContent = 'All Faculty';
+          const displaySchool = schV || SESSION?.school || 'All Schools';
+          const displayDept = depV || SESSION?.dept || 'All Departments';
+
+          if (displaySchool === 'All Schools' && displayDept === 'All Departments') {
+            document.getElementById('facDept').textContent = 'Institution Overview';
+          } else {
+            document.getElementById('facDept').textContent = displayDept === 'All Departments' ? displaySchool : `${displayDept} · ${displaySchool}`;
+          }
+          document.getElementById('facTags').innerHTML = '';
+          return;
+        }
+
+        try {
+          const res = await fetch(`${API}/faculty-info?faculty=${encodeURIComponent(facV)}`);
+          const data = await res.json();
+          if (!data.length) return;
+
+          const f = data[0];
+          const initials = (f.faculty_name || '').split(' ').map(w => w[0]).join('').substring(0, 2);
+          document.getElementById('facAv').textContent = initials || '✦';
+          document.getElementById('facName').textContent = f.faculty_name || '—';
+          document.getElementById('facDept').textContent = `${f.faculty_dept || ''} · ${f.faculty_school || ''}`;
+          const subjs = f.subjects || [];
+          document.getElementById('facTags').innerHTML = subjs.map(s => `<span class="ftag">${s}</span>`).join('');
+        } catch (e) { console.warn('faculty info error', e); }
+      }
+
+      // ── DONUT CHART ───────────────────────────────────────────────
+      async function loadDonut() {
+        setLoading('cardDonut', true);
+        try {
+          const res = await fetch(`${API}/rating-distribution?${buildQS()}`);
+          const rows = await res.json();
+          const labels = rows.map(r => r.rating);
+          const data = rows.map(r => r.count);
+          const colors = labels.map(l => COLORS[l]);
+
+          dc('donut');
+          charts.donut = new Chart(document.getElementById('cDonut').getContext('2d'), {
+            type: 'doughnut',
+            data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: getVar('--s1'), borderWidth: 3, hoverOffset: 8 }] },
+            options: {
+              cutout: '68%',
+              responsive: true,
+              maintainAspectRatio: true,
+              animation: { duration: 900 },
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  backgroundColor: getVar('--s3'), borderColor: getVar('--border2'), borderWidth: 1, titleColor: getVar('--text'), bodyColor: getVar('--muted'),
+                  callbacks: { label: c => ` ${c.label}: ${c.raw.toLocaleString()} responses` }
+                }
+              }
+            },
+          });
+
+          // Legend
+          const total = data.reduce((a, b) => a + b, 0);
+          document.getElementById('dlegend').innerHTML = labels.map((l, i) =>
+            `<div class="dleg"><div class="dlegd" style="background:${colors[i]}"></div>
+       <span class="dcount">${Number(data[i]).toLocaleString()}</span>&nbsp;<span style="color:var(--muted)">${l}</span>
+       <span style="color:var(--muted2);font-size:10px;">&nbsp;(${total ? ((data[i] / total) * 100).toFixed(1) : 0}%)</span></div>`
+          ).join('');
+        } catch (e) { console.warn('donut error', e); }
+        setLoading('cardDonut', false);
+      }
+
+      // ── BATCH STACKED BAR ─────────────────────────────────────────
+      async function loadBatchChart() {
+        setLoading('cardBatch', true);
+        try {
+          const res = await fetch(`${API}/batch-ratings?${buildQS()}`);
+          const rows = await res.json();
+          const labels = rows.map(r => r.batch);
+
+          dc('batch');
+          charts.batch = new Chart(document.getElementById('cBatch').getContext('2d'), {
+            type: 'bar',
+            data: {
+              labels,
+              datasets: RATINGS.map(r => ({
+                label: r, data: rows.map(d => d[r] || 0),
+                backgroundColor: COLORS[r], borderRadius: 2, borderSkipped: false,
+              }))
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'bottom', labels: { color: getVar('--muted'), boxWidth: 9, font: { size: 10 }, padding: 10 } },
+                tooltip: {
+                  backgroundColor: getVar('--s3'), borderColor: getVar('--border2'), borderWidth: 1, titleColor: getVar('--text'), bodyColor: getVar('--muted'),
+                  callbacks: { title: c => rows[c[0].dataIndex]?.batch || '' }
+                }
+              },
+              scales: {
+                x: { stacked: true, grid: { color: getVar('--grid-color') }, ticks: { color: getVar('--muted'), font: { size: 10 }, maxRotation: 35, autoSkip: true, maxTicksLimit: 18 } },
+                y: { stacked: true, grid: { color: getVar('--grid-color') }, ticks: { color: getVar('--muted'), font: { size: 10 } } }
+              }
+            }
+          });
+        } catch (e) { console.warn('batch chart error', e); }
+        setLoading('cardBatch', false);
+      }
+
+      const valPlugin = {
+        id: 'valPlugin',
+        afterDatasetsDraw(chart) {
+          const ctx = chart.ctx;
+          chart.data.datasets.forEach((dataset, i) => {
+            const meta = chart.getDatasetMeta(i);
+            meta.data.forEach((bar, index) => {
+              const val = dataset.data[index];
+              ctx.fillStyle = getVar('--text');
+              ctx.font = '600 11px Sora, sans-serif';
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(Number(val).toFixed(2) + '/4', bar.x + 6, bar.y + 1);
+            });
+          });
+        }
+      };
+
+      // ── SCORE TREND — horizontal bar, readable ────────────────────
+      async function loadTrend() {
+        setLoading('cardTrend', true);
+        try {
+          const res = await fetch(`${API}/score-trend?${buildQS({ top: 15 })}`);
+          const rows = await res.json();
+
+          // Sort ascending so highest score is at top visually
+          rows.sort((a, b) => a.avg_score - b.avg_score);
+          const labels = rows.map(r => r.short || r.batch);
+          const data = rows.map(r => r.avg_score);
+          const bgs = data.map(v =>
+            v >= 3.5 ? '#4f8ef7' : v >= 3 ? '#3dd9c4' : v >= 2.5 ? '#f7d44f' : '#f75f5f'
+          );
+
+          dc('trend');
+          // Compute canvas height based on row count: 28px per bar + padding
+          const trendH = Math.max(200, rows.length * 32 + 40);
+          const trendWrap = document.getElementById('wrapTrend');
+          trendWrap.style.height = trendH + 'px';
+
+          charts.trend = new Chart(document.getElementById('cTrend').getContext('2d'), {
+            type: 'bar',
+            data: { labels, datasets: [{ label: 'Avg Score', data, backgroundColor: bgs, borderRadius: 4, barThickness: 20 }] },
+            plugins: [valPlugin],
+            options: {
+              indexAxis: 'y',
+              responsive: true, maintainAspectRatio: false,
+              layout: { padding: { right: 55 } },
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  backgroundColor: getVar('--s3'), borderColor: getVar('--border2'), borderWidth: 1, titleColor: getVar('--text'), bodyColor: getVar('--muted'),
+                  callbacks: {
+                    title: c => rows[c[0].dataIndex]?.batch || '',
+                    label: c => ` Avg: ${c.raw.toFixed(3)} / 4.000   (${rows[c[0].dataIndex]?.response_count?.toLocaleString()} responses)`,
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  min: 1, max: 4, grid: { color: getVar('--grid-color') }, ticks: {
+                    color: getVar('--muted'), font: { size: 10 },
+                    callback: v => ({ 1: 'Unsat.', 2: 'Satisf.', 3: 'Good', 4: 'V.Good' }[v] || v)
+                  }
+                },
+                y: { grid: { display: false }, ticks: { color: getVar('--text'), font: { size: 11 } } }
+              }
+            }
+          });
+        } catch (e) { console.warn('trend error', e); }
+        setLoading('cardTrend', false);
+      }
+
+      // ── SUBJECT PERFORMANCE ───────────────────────────────────────
+      async function loadSubject() {
+        setLoading('cardSubj', true);
+        try {
+          const res = await fetch(`${API}/subject-performance?${buildQS({ top: 20 })}`);
+          const rows = await res.json();
+          rows.sort((a, b) => a.avg_score - b.avg_score);
+          const labels = rows.map(r => r.subject);
+          const data = rows.map(r => r.avg_score);
+          const bgs = data.map(v => v >= 3.5 ? '#4f8ef7' : v >= 3 ? '#3dd9c4' : v >= 2.5 ? '#f7d44f' : '#f75f5f');
+
+          dc('subj');
+          // Compute height from row count: 28px per bar + padding
+          const subjH = Math.max(200, rows.length * 32 + 40);
+          const subjWrap = document.getElementById('wrapSubj');
+          subjWrap.style.height = subjH + 'px';
+
+          charts.subj = new Chart(document.getElementById('cSubj').getContext('2d'), {
+            type: 'bar',
+            data: { labels, datasets: [{ label: 'Avg Score', data, backgroundColor: bgs, borderRadius: 4, barThickness: 20 }] },
+            plugins: [valPlugin],
+            options: {
+              indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+              layout: { padding: { right: 55 } },
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  backgroundColor: getVar('--s3'), borderColor: getVar('--border2'), borderWidth: 1, titleColor: getVar('--text'), bodyColor: getVar('--muted'),
+                  callbacks: {
+                    label: c => ` Avg: ${c.raw.toFixed(3)} / 4.000  (${rows[c[0].dataIndex]?.response_count?.toLocaleString()} responses)`,
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  min: 1, max: 4, grid: { color: getVar('--grid-color') }, ticks: {
+                    color: getVar('--muted'), font: { size: 10 },
+                    callback: v => ({ 1: 'Unsat.', 2: 'Satisf.', 3: 'Good', 4: 'V.Good' }[v] || v)
+                  }
+                },
+                y: { grid: { display: false }, ticks: { color: getVar('--text'), font: { size: 11 } } }
+              }
+            }
+          });
+        } catch (e) { console.warn('subject error', e); }
+        setLoading('cardSubj', false);
+      }
+
+      // ── QUESTION BREAKDOWN ────────────────────────────────────────
+      async function loadQuestions() {
+        setLoading('cardQ', true);
+        try {
+          const res = await fetch(`${API}/question-breakdown?${buildQS()}`);
+          const rows = await res.json();
+          const list = document.getElementById('qlist');
+          list.innerHTML = rows.map(d => {
+            const tot = d.total || 1;
+            const pcts = RATINGS.map(r => ((d[r] || 0) / tot * 100).toFixed(1));
+
+            const segments = RATINGS.map((r, i) => `
+        <div class="qseg" style="width:${pcts[i]}%;background:${COLORS[r]};border-radius:${i === 0 ? '4px 0 0 4px' : i === RATINGS.length - 1 ? '0 4px 4px 0' : '0'};">
+          <div class="qtt" style="${pcts[i] == 0 ? 'display:none;' : ''}">
+            <div style="font-weight:600;font-size:11px;margin-bottom:6px;">${d.question}</div>
+            <div class="ttr">
+              <div class="ttd" style="background:${COLORS[r]}"></div>
+              <span class="ttl">${r}</span>
+              <span class="ttv">${(d[r] || 0).toLocaleString()}</span>
+              <span class="ttp">&nbsp;(${pcts[i]}%)</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+            return `
+        <div class="qi">
+          <div class="qh"><div class="qn">${d.question}</div><div class="qsc">${d.avg_score}/4</div></div>
+          <div class="qtrack">
+            ${segments}
+          </div>
+        </div>`;
+          }).join('');
+        } catch (e) { console.warn('questions error', e); }
+        setLoading('cardQ', false);
+      }
+
+      // ── SUGGESTIONS ───────────────────────────────────────────────
+      async function loadSuggestions(reset = false) {
+        if (reset) {
+          suggPage = 1;
+          document.getElementById('slist').innerHTML = '';
+          // Populate the batch filter dropdown with batches matching current filters
+          populateSuggBatchFilter();
+        }
+
+        setLoading('cardSugg', true);
+        const suggBatch = document.getElementById('suggBatchSel').value;
+        const offset = (suggPage - 1) * LIMIT;
+        const qs = buildQS({ limit: LIMIT, offset: offset });
+        // Overlay batch filter on top of main batch filter if selected
+        const finalQS = suggBatch ? qs + `&batch=${encodeURIComponent(suggBatch)}` : qs;
+
+        try {
+          const res = await fetch(`${API}/suggestions?${finalQS}`);
+          const d = await res.json();
+          suggTotal = d.total || 0;
+          document.getElementById('suggCount').innerHTML =
+            `<strong>${suggTotal.toLocaleString()}</strong> meaningful suggestions`;
+
+          const list = document.getElementById('slist');
+          list.innerHTML = ''; // Always clear for pagination
+
+          if (!d.items?.length) {
+            if (reset) list.innerHTML = '<div class="nodata">No suggestions for current selection</div>';
+            document.getElementById('suggPagination').style.display = 'none';
+          } else {
+            d.items.forEach(s => {
+              const short = (s.student_batch || '').replace(/^\d{4}\s+/, '');
+              const card = document.createElement('div');
+              card.className = 'scard';
+              card.innerHTML = `${s.answer_text}
+          <div class="smeta">
+            <span class="stag">📚 ${short}</span>
+            <span class="stag">👤 ${s.faculty_name}</span>
+            ${s.subject ? `<span class="stag">📖 ${s.subject}</span>` : ''}
+          </div>`;
+              list.appendChild(card);
+            });
+
+            const totalPages = Math.ceil(suggTotal / LIMIT) || 1;
+            document.getElementById('suggPagination').style.display = 'flex';
+            document.getElementById('suggPageInfo').textContent = `Page ${suggPage} of ${totalPages}`;
+            document.getElementById('suggPrevBtn').disabled = suggPage <= 1;
+            document.getElementById('suggNextBtn').disabled = suggPage >= totalPages;
+          }
+        } catch (e) { console.warn('suggestions error', e); }
+        setLoading('cardSugg', false);
+      }
+
+      async function populateSuggBatchFilter() {
+        // Fill the suggestion batch dropdown based on available batches in current filter
+        const sel = document.getElementById('suggBatchSel');
+        const current = sel.value;
+        sel.innerHTML = '<option value="">All Batches</option>';
+        const avail = getAvailBatches('');
+        avail.forEach(b => {
+          const short = (b.student_batch || '').replace(/^\d{4}\s+/, '');
+          sel.innerHTML += `<option value="${esc(b.student_batch)}">${b.batch_year ? b.batch_year + ' — ' : ''}${short}</option>`;
+        });
+        // Restore selection if still valid
+        if (avail.some(b => b.student_batch === current)) sel.value = current;
+      }
+
+      function changeSuggPage(dir) {
+        suggPage += dir;
+        loadSuggestions(false);
+      }
+
+      // ── CHART DESTROY HELPER ──────────────────────────────────────
+      function dc(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+      // ── UTIL ──────────────────────────────────────────────────────
+      function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+      // ── CSV UPLOAD ────────────────────────────────────────────────
+      async function uploadCSV(input) {
+        if (!input.files.length) return;
+        const bar = document.getElementById('upbar');
+        bar.classList.add('show');
+        document.getElementById('upfill').style.width = '15%';
+        document.getElementById('upstatus').textContent = 'Uploading…';
+
+        const form = new FormData();
+        form.append('file', input.files[0]);
+
+        try {
+          document.getElementById('upfill').style.width = '50%';
+          document.getElementById('upstatus').textContent = 'Processing on server…';
+          const res = await fetch(`${API}/upload-csv`, { method: 'POST', body: form });
+          const d = await res.json();
+          document.getElementById('upfill').style.width = '100%';
+          if (d.status === 'ok') {
+            document.getElementById('upstatus').textContent = `✓ ${d.message}`;
+            await loadFilters();
+            renderAll();
+          } else {
+            document.getElementById('upstatus').textContent = `⚠ ${d.message}`;
+          }
+        } catch (e) {
+          document.getElementById('upstatus').textContent = '⚠ Upload failed: ' + e.message;
+        }
+        setTimeout(() => bar.classList.remove('show'), 5000);
+        input.value = '';
+      }
+
+      function switchTab(type) {
+        // Show/Hide sections
+        document.getElementById('section-faculty').style.display = (type === 'faculty') ? 'block' : 'none';
+        document.getElementById('section-institution').style.display = (type === 'institution') ? 'block' : 'none';
+
+        // Toggle Button UI
+        document.getElementById('tab-fac').classList.toggle('active', type === 'faculty');
+        document.getElementById('tab-inst').classList.toggle('active', type === 'institution');
+
+        if (type === 'institution') {
+          // CHANGE: Call the new data loader that handles filters
+          loadInstitutionalData();
+        }
+      }
+      async function renderInstitutionalChart(data) {
+        const ctx = document.getElementById('instChart').getContext('2d');
+        if (window.charts && window.charts['instChart']) window.charts['instChart'].destroy();
+
+        // Determine theme color for labels
+        const isDark = document.body.classList.contains('dark-theme') || !document.body.classList.contains('light-theme');
+        const labelColor = isDark ? '#ffffff' : '#333333';
+
+        // NEW: Custom Plugin to draw labels every time the chart renders
+        const barLabelsPlugin = {
+          id: 'barLabels',
+          afterDatasetsDraw(chart) {
+            const { ctx, data } = chart;
+            ctx.save();
+            ctx.font = "bold 12px Sora, sans-serif";
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = labelColor;
+
+            chart.getDatasetMeta(0).data.forEach((bar, index) => {
+              const val = data.datasets[0].data[index];
+              // Draw "4.5 / 5" at the end of the bar (bar.x + 10px padding)
+              ctx.fillText(val + ' / 5', bar.x + 10, bar.y);
+            });
+            ctx.restore();
+          }
+        };
+
+        window.charts['instChart'] = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: data.map(d => d.label),
+            datasets: [{
+              data: data.map(d => d.value),
+              backgroundColor: '#4f8ef7',
+              borderRadius: 5,
+              barThickness: 20
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { enabled: true }
+            },
+            scales: {
+              x: {
+                min: 0,
+                max: 5.8,
+                grid: { display: false },
+                ticks: { color: 'var(--text-dim)' }
+              },
+              y: {
+                grid: { display: false },
+                ticks: { color: 'var(--text)', font: { family: 'Sora', size: 11 } }
+              }
+            }
+          },
+          plugins: [barLabelsPlugin] // Register the plugin here
+        });
+      }
+
+      async function loadInstitutionalData() {
+        const role = window.userRole || 'admin';
+        const uSchool = window.userSchool || '';
+
+        const schoolVal = document.getElementById('inst-school-filter')?.value || '';
+        const deptVal = document.getElementById('inst-dept-filter')?.value || '';
+        const batchVal = document.getElementById('inst-batch-filter')?.value || '';
+
+        const params = new URLSearchParams({
+          role: role,
+          school: schoolVal || uSchool,
+          dept: deptVal,
+          batch: batchVal
+        });
+
+        try {
+          // --- 1. Fetch Ratings Stats & Render Bar Chart ---
+          const statsRes = await fetch(`${API}/institutional-stats?${params}`);
+          if (!statsRes.ok) throw new Error("Stats fetch failed");
+          const stats = await statsRes.json();
+          renderInstitutionalChart(stats);
+
+          // Update Average Score Header
+          const avgDisplay = document.getElementById('inst-avg-score');
+          if (stats && stats.length > 0) {
+            const sum = stats.reduce((acc, curr) => acc + parseFloat(curr.value || 0), 0);
+            avgDisplay.innerText = (sum / stats.length).toFixed(2);
+          } else {
+            avgDisplay.innerText = '0.00';
+          }
+
+          // --- 2. Fetch Sentiment Distribution (NOW USING SURVEY LABELS) ---
+          const distRes = await fetch(`${API}/institutional-distribution?${params}`);
+          if (!distRes.ok) throw new Error("Distribution fetch failed");
+          const distData = await distRes.json();
+
+          // Pass data to the updated renderer
+          renderInstDistribution(distData);
+
+          /** * FIX: Calculate Total Responses from the survey distribution.
+           * Mapping: strongly_agree, agree, neutral, disagree
+           */
+          const totalParticipants = (distData.strongly_agree || 0) +
+            (distData.agree || 0) +
+            (distData.neutral || 0) +
+            (distData.disagree || 0);
+
+          const totalRespEl = document.getElementById('inst-total-responses');
+          if (totalRespEl) {
+            totalRespEl.innerText = totalParticipants.toLocaleString();
+            totalRespEl.style.color = 'var(--accent)'; // Visible in both themes
+          }
+
+          // --- 3. Load Text Suggestions ---
+          const suggRes = await fetch(`${API}/institutional-suggestions?${params}`);
+          if (!suggRes.ok) throw new Error("Suggestions fetch failed");
+          const suggData = await suggRes.json();
+
+          let suggestionsList = Array.isArray(suggData) ? (suggData[0]?.items || []) : (suggData.items || []);
+
+          let html = '';
+          if (suggestionsList.length === 0) {
+            html = `<div style="text-align:center; padding:50px 20px; color:var(--text-dim); font-size: 0.9em; opacity: 0.7;">
+                        No long-form suggestions found for this selection.
+                    </div>`;
+          } else {
+            suggestionsList.forEach(s => {
+              html += `
+                <div class="suggestion-item" style="padding:15px; border-bottom:1px solid var(--s3); margin-bottom:5px;">
+                    <div style="font-size:0.75em; color:var(--accent); font-weight:bold; margin-bottom:4px;">
+                        ${esc(s.faculty_dept || 'Department')}
+                    </div>
+                    <div style="color:var(--text); line-height:1.5;">"${esc(s.answer_text)}"</div>
+                    <div style="font-size:0.7em; color:var(--text-dim); margin-top:6px;">Batch: ${esc(s.student_batch)}</div>
+                </div>`;
+            });
+          }
+          document.getElementById('inst-suggestions-content').innerHTML = html;
+
+          // --- 4. Refresh Filter Dropdowns ---
+          const filterRes = await fetch(`${API}/institutional-filters?${params}`);
+          if (filterRes.ok) {
+            const filters = await filterRes.json();
+            updateDropdown('inst-school-filter', filters.schools, schoolVal);
+            updateDropdown('inst-dept-filter', filters.departments, deptVal);
+            updateDropdown('inst-batch-filter', filters.batches, batchVal);
+          }
+
+        } catch (e) {
+          console.error("Error loading institutional view:", e);
+        }
+      }
+      function renderInstDistribution(data) {
+        // A. Render Donut Chart with Survey Labels
+        const ctx = document.getElementById('instDonutChart').getContext('2d');
+        if (window.charts && window.charts['instDonut']) window.charts['instDonut'].destroy();
+
+        // Map backend keys to human-readable labels and impactful colors
+        const surveyLabels = ['Strongly Agree', 'Agree', 'Neutral', 'Disagree'];
+        const surveyCounts = [
+          data.strongly_agree || 0,
+          data.agree || 0,
+          data.neutral || 0,
+          data.disagree || 0
+        ];
+
+        window.charts = window.charts || {};
+        window.charts['instDonut'] = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: surveyLabels,
+            datasets: [{
+              data: surveyCounts,
+              backgroundColor: ['#00b894', '#0984e3', '#fdcb6e', '#d63031'], // Green, Blue, Yellow, Red
+              borderWidth: 0,
+              hoverOffset: 10
+            }]
+          },
+          options: {
+            cutout: '75%',
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: { color: 'var(--text-dim)', padding: 15, font: { size: 10 }, boxWidth: 10 }
+              }
+            }
+          }
+        });
+
+        // B. Render Progress Bars with Percentage Calculation
+        const total = surveyCounts.reduce((a, b) => a + b, 0) || 1;
+        const ratings = [
+          { label: 'Strongly Agree', count: data.strongly_agree || 0, color: '#00b894' },
+          { label: 'Agree', count: data.agree || 0, color: '#0984e3' },
+          { label: 'Neutral', count: data.neutral || 0, color: '#fdcb6e' },
+          { label: 'Disagree', count: data.disagree || 0, color: '#d63031' }
+        ];
+
+        let html = '';
+        ratings.forEach(r => {
+          const pct = ((r.count / total) * 100).toFixed(1);
+          html += `
+            <div style="margin-bottom: 12px;">
+                <div style="display:flex; justify-content:space-between; font-size:0.75em; margin-bottom:6px;">
+                    <span style="color:var(--text); font-weight:600;">${r.label}</span>
+                    <span style="color:var(--text-dim);">${r.count} (${pct}%)</span>
+                </div>
+                <div style="height:8px; background:var(--s3); border-radius:10px; overflow:hidden;">
+                    <div style="width:${pct}%; height:100%; background:${r.color}; border-radius:10px; transition: width 0.5s ease-in-out;"></div>
+                </div>
+            </div>`;
+        });
+        document.getElementById('inst-rating-distribution').innerHTML = html;
+      }
+
+      function updateDropdown(id, list, currentVal) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const label = id.split('-')[1].toUpperCase();
+        let html = `<option value="">All ${label}S</option>`;
+        list.forEach(item => {
+          const selected = (item === currentVal) ? 'selected' : '';
+          html += `<option value="${esc(item)}" ${selected}>${esc(item)}</option>`;
+        });
+        el.innerHTML = html;
+      }
+
+      // Function to show/hide the questions reference based on backend mapping
+      // Function to show/hide the questions reference
+      function toggleInstQuestions() {
+        const overlay = document.getElementById('inst-questions-overlay');
+        const listContainer = document.getElementById('inst-questions-list');
+
+        const questionMapping = {
+          "Curriculum Relevance": "1. The curriculum of my programme is current and relevant.",
+          "Conceptual Foundation": "2. The courses provide a strong conceptual foundation.",
+          "Mentoring & Guidance": "3. The department provides adequate academic guidance and mentoring.",
+          "Enrichment Activities": "4. The department organises academic enrichment activities - Conferences, workshops, guest lectures, etc.",
+          "Infrastructure": "5. Infrastructure and facilities in the department are adequate for learning.",
+          "Admin Support": "6. The institution provides effective academic and administrative support services.",
+          "Campus Environment": "7. The campus environment is safe, inclusive and conducive to learning.",
+          "Holistic Development": "8. The University promotes holistic development through cultural, sports, and extracurricular activities."
+        };
+
+        if (overlay.style.display === 'none' || overlay.style.display === '') {
+          let html = '';
+          Object.entries(questionMapping).forEach(([label, question]) => {
+            html += `
+                <div style="margin-bottom: 15px; border-bottom: 1px solid var(--s3); padding-bottom: 8px;">
+                    <div style="color: var(--accent) !important; font-weight: 600; font-size: 0.85em; margin-bottom: 3px;">
+                        ${label}
+                    </div>
+                    <div style="color: var(--text) !important; line-height: 1.4; font-size: 0.95em;">
+                        ${question}
+                    </div>
+                </div>`;
+          });
+          listContainer.innerHTML = html;
+          overlay.style.display = 'block';
+        } else {
+          overlay.style.display = 'none';
+        }
+      }
+
+      async function renderInstitutionalChart(data) {
+        const ctx = document.getElementById('instChart').getContext('2d');
+        if (window.charts && window.charts['instChart']) window.charts['instChart'].destroy();
+
+        // Determine current text color based on theme
+        const isDark = document.body.classList.contains('dark-theme') || !document.body.classList.contains('light-theme');
+        const labelColor = isDark ? '#ffffff' : '#333333';
+
+        window.charts['instChart'] = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: data.map(d => d.label),
+            datasets: [{
+              data: data.map(d => d.value),
+              backgroundColor: '#4f8ef7',
+              borderRadius: 5,
+              barThickness: 20
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: {
+                min: 0,
+                max: 5.8,
+                grid: { display: false },
+                ticks: { color: 'var(--text-dim)' }
+              },
+              y: {
+                grid: { display: false },
+                ticks: { color: 'var(--text)', font: { family: 'Sora', size: 11 } }
+              }
+            },
+            animation: {
+              onComplete: function () {
+                const chart = this;
+                const ctx = chart.ctx;
+                ctx.font = "bold 12px Sora, sans-serif";
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+
+                // FIX: Use the calculated labelColor instead of hardcoded white
+                ctx.fillStyle = labelColor;
+
+                chart.data.datasets.forEach((dataset, i) => {
+                  const meta = chart.getDatasetMeta(i);
+                  meta.data.forEach((bar, index) => {
+                    const val = dataset.data[index];
+                    ctx.fillText(val + ' / 5', bar.x + 10, bar.y);
+                  });
+                });
+              }
+            }
+          }
+        });
+      }
+    </script>
+</body>
+
+</html>

@@ -5,19 +5,22 @@ Run: uvicorn main:app --reload --port 8000
 from fastapi import FastAPI, Query, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from typing import Optional, List
-# import backend.database as db
+from fastapi.staticfiles import StaticFiles
+from typing import Optional
 import database as db
 import csv_loader
-import io
 import os
-from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Faculty Feedback API", version="1.0.0")
 
+# ── CORS ──────────────────────────────────────────────────────
+# FIX: Replace wildcard "*" with explicit origins so credentials work correctly.
+# Add your Vercel frontend URL here once deployed.
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:5500").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,8 +53,6 @@ ROLES = {
     "EDWARD@KRISTUJAYANTI.COM": { "pass": "EDWARD@KRISTUJAYANTI.COM", "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
     "CJUDE@KRISTUJAYANTI.COM": { "pass": "CJUDE@KRISTUJAYANTI.COM", "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
     "AS@KRISTUJAYANTI.COM": { "pass": "AS@KRISTUJAYANTI.COM", "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
-    "admin": { "pass": "admin123", "role": "admin", "school": None, "upload": True, "label": "Super Admin" },
-    "hod_mgmt": { "pass": "hod123", "role": "hod", "dept": "DEPARTMENT OF PROFESSIONAL MANAGEMENT STUDIES", "upload": False, "label": "HOD" }
 }
 
 
@@ -84,7 +85,6 @@ async def get_filters(
     batch: Optional[str] = Query(None),
     rating: Optional[str] = Query(None),
 ):
-    """Return all available filter options, optionally scoped by role and other active filters."""
     return db.get_filter_options(role=role, dept=dept, school=school, faculty=faculty, year=year, programme=programme, batch=batch, rating=rating)
 
 
@@ -137,7 +137,7 @@ async def batch_ratings(
                                 programme=programme, batch=batch)
 
 
-# ── score trend (top N batches by response count) ─────────────
+# ── score trend ───────────────────────────────────────────────
 @app.get("/api/score-trend")
 async def score_trend(
     role: str = Query("admin"),
@@ -226,28 +226,28 @@ async def upload_csv(file: UploadFile = File(...)):
     return result
 
 
-# INSTITUTION AND DEPARTMENT
-
+# ── Institutional endpoints ───────────────────────────────────
 @app.get("/api/institutional-stats")
 async def get_inst_stats(
     role: str = Query("admin"),
     school: Optional[str] = Query(None),
-    dept: Optional[str] = Query(None)
+    dept: Optional[str] = Query(None),
+    batch: Optional[str] = Query(None)   # ← ADDED
 ):
-    # This logic filters by role/school just like your faculty stats
     where_clause = "WHERE is_suggestion = FALSE"
     params = []
-    
     if role == "dean" and school:
         where_clause += " AND faculty_school = %s"
         params.append(school)
     if dept:
         where_clause += " AND faculty_dept = %s"
         params.append(dept)
-
+    if batch:                             # ← ADDED
+        where_clause += " AND student_batch = %s"
+        params.append(batch)
     query = f"""
-        SELECT question_short as label, AVG(score) as value 
-        FROM institutional_feedback 
+        SELECT question_short as label, ROUND(AVG(score)::numeric, 2) as value
+        FROM institutional_feedback
         {where_clause}
         GROUP BY question_short
     """
@@ -255,9 +255,43 @@ async def get_inst_stats(
         cur.execute(query, params)
         return cur.fetchall()
 
+# ← ADD THIS NEW ENDPOINT directly below
+@app.get("/api/institutional-avg")
+async def get_inst_avg(
+    role: str = Query("admin"),
+    school: Optional[str] = Query(None),
+    dept: Optional[str] = Query(None),
+    batch: Optional[str] = Query(None)
+):
+    where_clause = "WHERE is_suggestion = FALSE"
+    params = []
+    if role == "dean" and school:
+        where_clause += " AND faculty_school = %s"
+        params.append(school)
+    if dept:
+        where_clause += " AND faculty_dept = %s"
+        params.append(dept)
+    if batch:
+        where_clause += " AND student_batch = %s"
+        params.append(batch)
+    with db.cursor() as cur:
+        cur.execute(f"""
+            SELECT ROUND(AVG(score)::numeric, 2) AS avg
+            FROM institutional_feedback
+            {where_clause}
+        """, params)
+        row = cur.fetchone()
+        return {"avg": float(row["avg"]) if row["avg"] else None}
+
+
 @app.get("/api/institutional-filters")
-async def inst_filters(role: str = "admin", school: Optional[str] = None, dept: Optional[str] = None):
+async def inst_filters(
+    role: str = Query("admin"),
+    school: Optional[str] = Query(None),
+    dept: Optional[str] = Query(None)
+):
     return db.get_inst_filter_options(role=role, school=school, dept=dept)
+
 
 @app.get("/api/institutional-suggestions")
 async def inst_suggestions(
@@ -268,11 +302,11 @@ async def inst_suggestions(
     limit: int = Query(50),
     offset: int = Query(0),
 ):
-    # This calls the new function we will create in database.py
     return db.get_institutional_suggestions(
         role=role, dept=dept, school=school,
         batch=batch, limit=limit, offset=offset
     )
+
 
 @app.get("/api/institutional-distribution")
 async def inst_distribution(
@@ -285,6 +319,9 @@ async def inst_distribution(
         role=role, dept=dept, school=school, batch=batch
     )
 
+
 # ── Frontend Static Files ─────────────────────────────────────
-frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
-app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+# FIX: Use env var so path works both locally and on Render
+frontend_dir = os.getenv("FRONTEND_DIR", os.path.join(os.path.dirname(__file__), "..", "frontend"))
+if os.path.exists(frontend_dir):
+    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")

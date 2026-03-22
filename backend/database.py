@@ -490,7 +490,7 @@ def get_inst_filter_options(role="admin", school=None, dept=None):
     
     with cursor() as cur:
         # Get Schools available in Institutional Data
-        cur.execute(f"SELECT DISTINCT faculty_school FROM institutional_feedback ORDER BY 1")
+        cur.execute(f"SELECT DISTINCT faculty_school FROM institutional_feedback {where} ORDER BY 1", params)
         schools = [r["faculty_school"] for r in cur.fetchall() if r["faculty_school"]]
 
         # Get Depts available in Institutional Data
