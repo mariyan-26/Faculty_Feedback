@@ -1,12 +1,12 @@
 """
 Faculty Feedback Dashboard — FastAPI Backend
-Run: uvicorn main:app --reload --port 8000
+Local: uvicorn main:app --reload --port 8000
+AWS:   handler = Mangum(app) — used by Lambda
 """
-from fastapi import FastAPI, Query, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, Query, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from typing import Optional
+from mangum import Mangum
 import database as db
 import csv_loader
 import os
@@ -14,8 +14,6 @@ import os
 app = FastAPI(title="Faculty Feedback API", version="1.0.0")
 
 # ── CORS ──────────────────────────────────────────────────────
-# FIX: Replace wildcard "*" with explicit origins so credentials work correctly.
-# Add your Vercel frontend URL here once deployed.
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:5500").split(",")
 
 app.add_middleware(
@@ -35,24 +33,24 @@ async def startup():
 # ── auth ──────────────────────────────────────────────────────
 ROLES = {
     # DEANS
-    "GOPAKUMAR.AV@KRISTUJAYANTI.COM": { "pass": "GOPAKUMAR.AV@KRISTUJAYANTI.COM", "role": "dean", "school": "SCHOOL OF HUMANITIES AND SOCIAL SCIENCES", "upload": False, "label": "Dean" },
-    "VIJAYAKUMAR@KRISTUJAYANTI.COM": { "pass": "VIJAYAKUMAR@KRISTUJAYANTI.COM", "role": "dean", "school": "SCHOOL OF COMMERCE, ACCOUNTING AND FINANCE", "upload": False, "label": "Dean" },
-    "SURENDRANATH@KRISTUJAYANTI.COM": { "pass": "SURENDRANATH@KRISTUJAYANTI.COM", "role": "dean", "school": "SCHOOL OF BUSINESS AND MANAGEMENT", "upload": False, "label": "Dean" },
-    "VIJAYANAND@KRISTUJAYANTI.COM": { "pass": "VIJAYANAND@KRISTUJAYANTI.COM", "role": "dean", "school": "SCHOOL OF BIOLOGICAL AND FORENSIC SCIENCES", "upload": False, "label": "Dean" },
-    "RKUMAR@KRISTUJAYANTI.COM": { "pass": "RKUMAR@KRISTUJAYANTI.COM", "role": "dean", "school": "SCHOOL OF COMPUTATIONAL AND PHYSICAL SCIENCES", "upload": False, "label": "Dean" },
-    "MANJUNATH.MS@KRISTUJAYANTI.COM": { "pass": "MANJUNATH.MS@KRISTUJAYANTI.COM", "role": "dean", "school": "SCHOOL OF LAW", "upload": False, "label": "Dean" },
-    "DEVIKA.R@KRISTUJAYANTI.COM": { "pass": "DEVIKA.R@KRISTUJAYANTI.COM", "role": "dean", "school": "INSTITUTE OF MANAGEMENT", "upload": False, "label": "Dean" },
+    "GOPAKUMAR.AV@KRISTUJAYANTI.COM":  { "pass": "GOPAKUMAR.AV@KRISTUJAYANTI.COM",  "role": "dean",  "school": "SCHOOL OF HUMANITIES AND SOCIAL SCIENCES",       "upload": False, "label": "Dean" },
+    "VIJAYAKUMAR@KRISTUJAYANTI.COM":   { "pass": "VIJAYAKUMAR@KRISTUJAYANTI.COM",   "role": "dean",  "school": "SCHOOL OF COMMERCE, ACCOUNTING AND FINANCE",     "upload": False, "label": "Dean" },
+    "SURENDRANATH@KRISTUJAYANTI.COM":  { "pass": "SURENDRANATH@KRISTUJAYANTI.COM",  "role": "dean",  "school": "SCHOOL OF BUSINESS AND MANAGEMENT",              "upload": False, "label": "Dean" },
+    "VIJAYANAND@KRISTUJAYANTI.COM":    { "pass": "VIJAYANAND@KRISTUJAYANTI.COM",    "role": "dean",  "school": "SCHOOL OF BIOLOGICAL AND FORENSIC SCIENCES",     "upload": False, "label": "Dean" },
+    "RKUMAR@KRISTUJAYANTI.COM":        { "pass": "RKUMAR@KRISTUJAYANTI.COM",        "role": "dean",  "school": "SCHOOL OF COMPUTATIONAL AND PHYSICAL SCIENCES",  "upload": False, "label": "Dean" },
+    "MANJUNATH.MS@KRISTUJAYANTI.COM":  { "pass": "MANJUNATH.MS@KRISTUJAYANTI.COM",  "role": "dean",  "school": "SCHOOL OF LAW",                                  "upload": False, "label": "Dean" },
+    "DEVIKA.R@KRISTUJAYANTI.COM":      { "pass": "DEVIKA.R@KRISTUJAYANTI.COM",      "role": "dean",  "school": "INSTITUTE OF MANAGEMENT",                        "upload": False, "label": "Dean" },
 
     # SUPER ADMINS
-    "MARIYAN@KRISTUJAYANTI.COM": { "pass": "MARIYAN@KRISTUJAYANTI.COM", "role": "admin", "school": None, "upload": True, "label": "Super Admin" },
-    "BINOJOSEPH@KRISTUJAYANTI.COM": { "pass": "BINOJOSEPH@KRISTUJAYANTI.COM", "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
-    "AUGUSTINE@KRISTUJAYANTI.COM": { "pass": "AUGUSTINE@KRISTUJAYANTI.COM", "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
-    "FR.LIJO@KRISTUJAYANTI.COM": { "pass": "FR.LIJO@KRISTUJAYANTI.COM", "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
-    "FR.JOSHY@KRISTUJAYANTI.COM": { "pass": "FR.JOSHY@KRISTUJAYANTI.COM", "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
-    "FR.JAIS@KRISTUJAYANTI.COM": { "pass": "FR.JAIS@KRISTUJAYANTI.COM", "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
-    "EDWARD@KRISTUJAYANTI.COM": { "pass": "EDWARD@KRISTUJAYANTI.COM", "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
-    "CJUDE@KRISTUJAYANTI.COM": { "pass": "CJUDE@KRISTUJAYANTI.COM", "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
-    "AS@KRISTUJAYANTI.COM": { "pass": "AS@KRISTUJAYANTI.COM", "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
+    "MARIYAN@KRISTUJAYANTI.COM":       { "pass": "MARIYAN@KRISTUJAYANTI.COM",       "role": "admin", "school": None, "upload": True,  "label": "Super Admin" },
+    "BINOJOSEPH@KRISTUJAYANTI.COM":    { "pass": "BINOJOSEPH@KRISTUJAYANTI.COM",    "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
+    "AUGUSTINE@KRISTUJAYANTI.COM":     { "pass": "AUGUSTINE@KRISTUJAYANTI.COM",     "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
+    "FR.LIJO@KRISTUJAYANTI.COM":       { "pass": "FR.LIJO@KRISTUJAYANTI.COM",       "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
+    "FR.JOSHY@KRISTUJAYANTI.COM":      { "pass": "FR.JOSHY@KRISTUJAYANTI.COM",      "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
+    "FR.JAIS@KRISTUJAYANTI.COM":       { "pass": "FR.JAIS@KRISTUJAYANTI.COM",       "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
+    "EDWARD@KRISTUJAYANTI.COM":        { "pass": "EDWARD@KRISTUJAYANTI.COM",        "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
+    "CJUDE@KRISTUJAYANTI.COM":         { "pass": "CJUDE@KRISTUJAYANTI.COM",         "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
+    "AS@KRISTUJAYANTI.COM":            { "pass": "AS@KRISTUJAYANTI.COM",            "role": "admin", "school": None, "upload": False, "label": "Super Admin" },
 }
 
 
@@ -65,11 +63,11 @@ async def login(body: dict):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     return {
         "username": username,
-        "role":  cred["role"],
-        "dept":  cred.get("dept"),
-        "school": cred.get("school"),
-        "upload": cred.get("upload", False),
-        "label": cred["label"],
+        "role":     cred["role"],
+        "dept":     cred.get("dept"),
+        "school":   cred.get("school"),
+        "upload":   cred.get("upload", False),
+        "label":    cred["label"],
     }
 
 
@@ -85,7 +83,8 @@ async def get_filters(
     batch: Optional[str] = Query(None),
     rating: Optional[str] = Query(None),
 ):
-    return db.get_filter_options(role=role, dept=dept, school=school, faculty=faculty, year=year, programme=programme, batch=batch, rating=rating)
+    return db.get_filter_options(role=role, dept=dept, school=school, faculty=faculty,
+                                  year=year, programme=programme, batch=batch, rating=rating)
 
 
 # ── KPI summary ───────────────────────────────────────────────
@@ -121,7 +120,7 @@ async def rating_distribution(
                                       programme=programme, batch=batch)
 
 
-# ── batch ratings (stacked bar) ───────────────────────────────
+# ── batch ratings ─────────────────────────────────────────────
 @app.get("/api/batch-ratings")
 async def batch_ratings(
     role: str = Query("admin"),
@@ -216,6 +215,10 @@ async def faculty_info(
 
 
 # ── CSV upload ────────────────────────────────────────────────
+# NOTE: API Gateway has a 10MB limit.
+# Large CSVs (>10MB) must be uploaded via S3 presigned URL.
+# AWS team will configure S3 trigger for production.
+# This endpoint works for local development only.
 @app.post("/api/upload-csv")
 async def upload_csv(file: UploadFile = File(...)):
     if not file.filename.endswith(".csv"):
@@ -226,13 +229,13 @@ async def upload_csv(file: UploadFile = File(...)):
     return result
 
 
-# ── Institutional endpoints ───────────────────────────────────
+# ── Institutional Stats ───────────────────────────────────────
 @app.get("/api/institutional-stats")
 async def get_inst_stats(
     role: str = Query("admin"),
     school: Optional[str] = Query(None),
     dept: Optional[str] = Query(None),
-    batch: Optional[str] = Query(None)   # ← ADDED
+    batch: Optional[str] = Query(None)
 ):
     where_clause = "WHERE is_suggestion = FALSE"
     params = []
@@ -242,7 +245,7 @@ async def get_inst_stats(
     if dept:
         where_clause += " AND faculty_dept = %s"
         params.append(dept)
-    if batch:                             # ← ADDED
+    if batch:
         where_clause += " AND student_batch = %s"
         params.append(batch)
     query = f"""
@@ -255,7 +258,8 @@ async def get_inst_stats(
         cur.execute(query, params)
         return cur.fetchall()
 
-# ← ADD THIS NEW ENDPOINT directly below
+
+# ── Institutional Average ─────────────────────────────────────
 @app.get("/api/institutional-avg")
 async def get_inst_avg(
     role: str = Query("admin"),
@@ -284,6 +288,7 @@ async def get_inst_avg(
         return {"avg": float(row["avg"]) if row["avg"] else None}
 
 
+# ── Institutional Filters ─────────────────────────────────────
 @app.get("/api/institutional-filters")
 async def inst_filters(
     role: str = Query("admin"),
@@ -293,6 +298,7 @@ async def inst_filters(
     return db.get_inst_filter_options(role=role, school=school, dept=dept)
 
 
+# ── Institutional Suggestions ─────────────────────────────────
 @app.get("/api/institutional-suggestions")
 async def inst_suggestions(
     role: str = Query("admin"),
@@ -308,6 +314,7 @@ async def inst_suggestions(
     )
 
 
+# ── Institutional Distribution ────────────────────────────────
 @app.get("/api/institutional-distribution")
 async def inst_distribution(
     role: str = Query("admin"),
@@ -320,8 +327,7 @@ async def inst_distribution(
     )
 
 
-# ── Frontend Static Files ─────────────────────────────────────
-# FIX: Use env var so path works both locally and on Render
-frontend_dir = os.getenv("FRONTEND_DIR", os.path.join(os.path.dirname(__file__), "..", "frontend"))
-if os.path.exists(frontend_dir):
-    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+# ── AWS Lambda Handler ────────────────────────────────────────
+# Mangum wraps FastAPI for AWS Lambda + API Gateway
+# Ignored during local development — uvicorn uses `app` directly
+handler = Mangum(app, lifespan="off")
