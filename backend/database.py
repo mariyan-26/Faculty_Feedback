@@ -63,9 +63,31 @@ CREATE INDEX IF NOT EXISTS idx_option    ON feedback(selected_option);
 CREATE INDEX IF NOT EXISTS idx_suggestion ON feedback(is_suggestion);
 """
 
+# --- INSTITUTION OR DEPARTMENT SCHEMA ---
+INSTITUTION_SCHEMA = """
+CREATE TABLE IF NOT EXISTS institutional_feedback (
+    id                  SERIAL PRIMARY KEY,
+    student_batch       TEXT,
+    student_class       TEXT,
+    question            TEXT,
+    question_short      TEXT,
+    faculty_school      TEXT,
+    faculty_dept        TEXT,
+    selected_option     TEXT,
+    score               NUMERIC(3,1),
+    answer_text         TEXT,
+    batch_year          TEXT,
+    batch_programme     TEXT,
+    is_suggestion       BOOLEAN DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS idx_inst_school ON institutional_feedback(faculty_school);
+CREATE INDEX IF NOT EXISTS idx_inst_dept   ON institutional_feedback(faculty_dept);
+"""
+
 def init_db():
     with cursor() as cur:
         cur.execute(SCHEMA)
+        cur.execute(INSTITUTION_SCHEMA)
 
 
 # ── filter builder ─────────────────────────────────────────────
@@ -98,6 +120,19 @@ GENERIC_SUGGESTIONS = {
     "very good","everything is good","not applicable","satisfied","nice","great",
     "no other suggestions.","no other suggestions","no suggestions.","nill.",
     "null","—","no comments","no comment","nothing.","ok.","fine","fine.",
+}
+
+# ---INSTITUTION_QUESTION_MAP---
+INSTITUTION_QUESTION_MAP = {
+    "The curriculum of my programme is current and relevant.": "Curriculum Relevance",
+    "The courses provide a strong conceptual foundation.": "Conceptual Foundation",
+    "The department provides adequate academic guidance and mentoring.": "Mentoring & Guidance",
+    "The department organises academic enrichment activities - Conferences, workshops, guest lectures, etc.": "Enrichment Activities",
+    "Infrastructure and facilities in the department are adequate for learning.": "Infrastructure",
+    "The institution provides effective academic and administrative support services.": "Admin Support",
+    "The campus environment is safe, inclusive and conducive to learning.": "Campus Environment",
+    "The University promotes holistic development through cultural, sports, and extracurricular activities.": "Holistic Development",
+    "Additional Suggestions": "Suggestions"
 }
 
 def build_where(
@@ -446,3 +481,95 @@ def get_faculty_info(faculty=None, dept=None):
         else:
             return []
         return [dict(r) for r in cur.fetchall()]
+    
+
+def get_inst_filter_options(role="admin", school=None, dept=None):
+    """Specific filter options for the Institutional Table"""
+    # Use your existing build_where but we'll apply it to the inst table
+    where, params = build_where(role=role, school=school, dept=dept)
+    
+    with cursor() as cur:
+        # Get Schools available in Institutional Data
+        cur.execute(f"SELECT DISTINCT faculty_school FROM institutional_feedback ORDER BY 1")
+        schools = [r["faculty_school"] for r in cur.fetchall() if r["faculty_school"]]
+
+        # Get Depts available in Institutional Data
+        cur.execute(f"SELECT DISTINCT faculty_dept FROM institutional_feedback {where} ORDER BY 1", params)
+        depts = [r["faculty_dept"] for r in cur.fetchall() if r["faculty_dept"]]
+
+        # Get Batches available in Institutional Data
+        cur.execute(f"SELECT DISTINCT student_batch FROM institutional_feedback {where} ORDER BY 1", params)
+        batches = [r["student_batch"] for r in cur.fetchall() if r["student_batch"]]
+
+    return {
+        "schools": schools,
+        "departments": depts,
+        "batches": batches
+    }
+
+def get_institutional_stats(**kwargs):
+    # This remains the same, ensuring suggestions don't ruin the bar chart
+    where, params = build_where(**kwargs)
+    with cursor() as cur:
+        cur.execute(f"""
+            SELECT 
+                question_short AS label, 
+                ROUND(AVG(score), 2) AS value
+            FROM institutional_feedback
+            {where}
+            AND is_suggestion = FALSE  -- Filters out text-based suggestions
+            GROUP BY question_short
+            ORDER BY value DESC
+        """, params)
+        return cur.fetchall()
+
+def get_institutional_suggestions(**kwargs):
+    # Added defaults for limit and offset to prevent errors
+    limit  = kwargs.pop("limit", 50)
+    offset = kwargs.pop("offset", 0)
+    
+    where, params = build_where(**kwargs)
+
+    with cursor() as cur:
+        cur.execute(f"""
+            SELECT COUNT(*) AS cnt FROM institutional_feedback
+            {where}
+            AND is_suggestion = TRUE
+            AND answer_text IS NOT NULL
+            AND LENGTH(TRIM(answer_text)) > 15
+        """, params)
+        total = cur.fetchone()["cnt"]
+
+        cur.execute(f"""
+            SELECT
+                answer_text,
+                student_batch,
+                faculty_school,
+                faculty_dept
+            FROM institutional_feedback
+            {where}
+            AND is_suggestion = TRUE
+            AND answer_text IS NOT NULL
+            AND LENGTH(TRIM(answer_text)) > 15
+            ORDER BY id DESC
+            LIMIT %s OFFSET %s
+        """, params + [limit, offset])
+        rows = [dict(r) for r in cur.fetchall()]
+
+    return {"total": total, "items": rows, "limit": limit, "offset": offset}
+
+
+def get_institutional_distribution(**kwargs):
+    where, params = build_where(**kwargs)
+    with cursor() as cur:
+        cur.execute(f"""
+            SELECT 
+                COUNT(*) FILTER (WHERE score >= 4.5) as strongly_agree,
+                COUNT(*) FILTER (WHERE score >= 3.5 AND score < 4.5) as agree,
+                COUNT(*) FILTER (WHERE score >= 2.5 AND score < 3.5) as neutral,
+                COUNT(*) FILTER (WHERE score < 2.5) as disagree
+            FROM institutional_feedback
+            {where}
+            AND is_suggestion = FALSE
+        """, params)
+        return dict(cur.fetchone())

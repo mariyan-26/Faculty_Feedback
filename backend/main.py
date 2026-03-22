@@ -226,6 +226,65 @@ async def upload_csv(file: UploadFile = File(...)):
     return result
 
 
+# INSTITUTION AND DEPARTMENT
+
+@app.get("/api/institutional-stats")
+async def get_inst_stats(
+    role: str = Query("admin"),
+    school: Optional[str] = Query(None),
+    dept: Optional[str] = Query(None)
+):
+    # This logic filters by role/school just like your faculty stats
+    where_clause = "WHERE is_suggestion = FALSE"
+    params = []
+    
+    if role == "dean" and school:
+        where_clause += " AND faculty_school = %s"
+        params.append(school)
+    if dept:
+        where_clause += " AND faculty_dept = %s"
+        params.append(dept)
+
+    query = f"""
+        SELECT question_short as label, AVG(score) as value 
+        FROM institutional_feedback 
+        {where_clause}
+        GROUP BY question_short
+    """
+    with db.cursor() as cur:
+        cur.execute(query, params)
+        return cur.fetchall()
+
+@app.get("/api/institutional-filters")
+async def inst_filters(role: str = "admin", school: Optional[str] = None, dept: Optional[str] = None):
+    return db.get_inst_filter_options(role=role, school=school, dept=dept)
+
+@app.get("/api/institutional-suggestions")
+async def inst_suggestions(
+    role: str = Query("admin"),
+    dept: Optional[str] = Query(None),
+    school: Optional[str] = Query(None),
+    batch: Optional[str] = Query(None),
+    limit: int = Query(50),
+    offset: int = Query(0),
+):
+    # This calls the new function we will create in database.py
+    return db.get_institutional_suggestions(
+        role=role, dept=dept, school=school,
+        batch=batch, limit=limit, offset=offset
+    )
+
+@app.get("/api/institutional-distribution")
+async def inst_distribution(
+    role: str = Query("admin"),
+    dept: Optional[str] = Query(None),
+    school: Optional[str] = Query(None),
+    batch: Optional[str] = Query(None)
+):
+    return db.get_institutional_distribution(
+        role=role, dept=dept, school=school, batch=batch
+    )
+
 # ── Frontend Static Files ─────────────────────────────────────
 frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
 app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")

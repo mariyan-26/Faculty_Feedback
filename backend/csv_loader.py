@@ -14,72 +14,114 @@ RATING_SCORE = {"Very Good": 4.0, "Good": 3.0, "Satisfactory": 2.0, "Unsatisfact
 
 
 def load_csv(text: str) -> dict:
-    """Parse CSV text and insert rows into the feedback table. Returns stats."""
+    """Parse CSV text and route rows to either Faculty or Institutional tables."""
     reader = csv.DictReader(io.StringIO(text))
     
-    rows = []
+    fac_rows = []
+    inst_rows = []
     skipped = 0
-    inserted = 0
+
+    # Unified Rating Map for both 4-point and 5-point scales
+    RATING_MAP = {
+        # Faculty Scale
+        "Very Good": 4.0, "Good": 3.0, "Satisfactory": 2.0, "Unsatisfactory": 1.0,
+        # Institutional Scale
+        "Strongly Agree": 5.0, "Agree": 4.0, "Neutral": 3.0, "Disagree": 2.0, "Strongly Disagree": 1.0
+    }
 
     for raw in reader:
         def g(k): return (raw.get(k) or "").strip()
 
+        identifier = g("Identifier") # The new column you are adding
         batch      = g("Student Batch Name")
-        student_cl = g("Student Class Name")
         question   = g("Question")
-        fac_name   = g("Faculty Name")
-        fac_dept   = g("Faculty Department")
-        fac_school = g("Faculty School")
-        subject    = g("Slot Subject Name")
-        option     = g("Selected Option")
         answer     = g("Answer Text")
-        email      = g("Faculty Email Id")
-
-        if not batch or not fac_name:
+        
+        if not batch or not question:
             skipped += 1
             continue
 
-        # Derived fields
+        # Shared Derived fields
         year      = batch[:4] if batch[:4].isdigit() else None
         programme = batch[5:].strip() if year else batch
 
-        q_short   = QUESTION_MAP.get(question)
-        score     = RATING_SCORE.get(option)
+        # --- ROUTE TO INSTITUTIONAL TABLE ---
+        if identifier == "I&D":
+            q_short = db.INSTITUTION_QUESTION_MAP.get(question, question[:30])
+            option  = g("Selected Option")
+            score   = RATING_MAP.get(option, 0.0)
+            
+            # Check if it's the suggestion question
+            is_sugg = (question == "Additional Suggestions")
+            
+            # Filter generic noise for suggestions
+            if is_sugg and (not answer or len(answer.strip()) <= 15 or 
+                            answer.strip().lower() in db.GENERIC_SUGGESTIONS):
+                is_sugg = False
+                answer = None
 
-        is_sugg   = (question == "Additional Suggestions")
+            inst_rows.append((
+                batch, g("Student Class Name"), question, q_short,
+                g("Faculty School"), g("Faculty Department"),
+                option, score, answer, year, programme, is_sugg
+            ))
 
-        # Filter generic suggestions at load time
-        if is_sugg and (not answer or len(answer.strip()) <= 15 or
-                        answer.strip().lower() in GENERIC):
-            is_sugg = False
-            answer  = None   # discard noise
+        # --- ROUTE TO FACULTY TABLE (Original Logic) ---
+        else:
+            fac_name = g("Faculty Name")
+            if not fac_name:
+                skipped += 1
+                continue
 
-        rows.append((
-            batch, student_cl, question, q_short,
-            fac_name, fac_dept, fac_school,
-            subject, option, score, answer,
-            email, year, programme, is_sugg,
-        ))
+            q_short = db.QUESTION_MAP.get(question)
+            option  = g("Selected Option")
+            score   = RATING_MAP.get(option)
+            is_sugg = (question == "Additional Suggestions")
 
-    if not rows:
-        return {"status": "error", "message": "No valid rows found in CSV", "inserted": 0}
+            if is_sugg and (not answer or len(answer.strip()) <= 15 or 
+                            answer.strip().lower() in db.GENERIC_SUGGESTIONS):
+                is_sugg = False
+                answer = None
 
+            fac_rows.append((
+                batch, g("Student Class Name"), question, q_short,
+                fac_name, g("Faculty Department"), g("Faculty School"),
+                g("Slot Subject Name"), option, score, answer,
+                g("Faculty Email Id"), year, programme, is_sugg
+            ))
+
+    if not fac_rows and not inst_rows:
+        return {"status": "error", "message": "No valid rows found", "inserted": 0}
+    
     conn = db.get_conn()
     try:
         with conn.cursor() as cur:
-            # Optionally truncate first (re-upload scenario)
-            cur.execute("TRUNCATE TABLE feedback RESTART IDENTITY")
+            # 1. Handle Faculty Data
+            if fac_rows:
+                # ONLY truncate feedback if we are uploading new faculty rows
+                cur.execute("TRUNCATE TABLE feedback RESTART IDENTITY")
+                execute_values(cur, """
+                    INSERT INTO feedback (
+                        student_batch, student_class, question, question_short,
+                        faculty_name, faculty_dept, faculty_school,
+                        subject, selected_option, score, answer_text,
+                        faculty_email, batch_year, batch_programme, is_suggestion
+                    ) VALUES %s
+                """, fac_rows, page_size=2000)
 
-            execute_values(cur, """
-                INSERT INTO feedback (
-                    student_batch, student_class, question, question_short,
-                    faculty_name, faculty_dept, faculty_school,
-                    subject, selected_option, score, answer_text,
-                    faculty_email, batch_year, batch_programme, is_suggestion
-                ) VALUES %s
-            """, rows, page_size=2000)
+            # 2. Handle Institutional Data
+            if inst_rows:
+                # ONLY truncate institutional_feedback if we are uploading new I&D rows
+                cur.execute("TRUNCATE TABLE institutional_feedback RESTART IDENTITY")
+                execute_values(cur, """
+                    INSERT INTO institutional_feedback (
+                        student_batch, student_class, question, question_short,
+                        faculty_school, faculty_dept,
+                        selected_option, score, answer_text, 
+                        batch_year, batch_programme, is_suggestion
+                    ) VALUES %s
+                """, inst_rows, page_size=2000)
 
-            inserted = len(rows)
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -89,7 +131,7 @@ def load_csv(text: str) -> dict:
 
     return {
         "status": "ok",
-        "inserted": inserted,
-        "skipped": skipped,
-        "message": f"Successfully loaded {inserted:,} rows ({skipped} skipped)"
+        "message": f"Successfully loaded {len(fac_rows)} Faculty and {len(inst_rows)} Institutional rows.",
+        "inserted": len(fac_rows) + len(inst_rows),
+        "skipped": skipped
     }
