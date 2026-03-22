@@ -1,6 +1,7 @@
 // ── CONFIG ────────────────────────────────────────────────────
 //const API = '/api';
-const API = 'https://radiosensitive-reed-contrate.ngrok-free.dev/api';
+//const API = 'https://radiosensitive-reed-contrate.ngrok-free.dev/api';
+const API = 'https://kskwhahrj3xan44mglllrcal3i0caklx.lambda-url.ap-south-1.on.aws/api';
 
 // ── STATE ─────────────────────────────────────────────────────
 let SESSION = null;
