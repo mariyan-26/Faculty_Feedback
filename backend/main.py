@@ -323,5 +323,43 @@ async def inst_distribution(
         role=role, dept=dept, school=school, batch=batch
     )
 
+# ── Faculty Rankings ──────────────────────────────────────────
+@app.get("/api/faculty-rankings")
+async def faculty_rankings(
+    role: str = Query("admin"),
+    dept: Optional[str] = Query(None),
+    school: Optional[str] = Query(None),
+    year: Optional[str] = Query(None),
+    programme: Optional[str] = Query(None),
+    batch: Optional[str] = Query(None),
+    limit: int = Query(10),
+    search: Optional[str] = Query(None),
+    exclusive: bool = Query(False),
+):
+    return db.get_faculty_rankings(
+        role=role, dept=dept, school=school,
+        year=year, programme=programme, batch=batch,
+        limit=limit, search=search, exclusive=exclusive
+    )
+
+
+@app.get("/api/ranking-suggestions")
+async def ranking_suggestions(
+    faculty: str = Query(...),
+    role: str = Query("admin"),
+    dept: Optional[str] = Query(None),
+    school: Optional[str] = Query(None),
+    year: Optional[str] = Query(None),
+    programme: Optional[str] = Query(None),
+    batch: Optional[str] = Query(None),
+    limit: int = Query(5),
+    offset: int = Query(0),
+):
+    return db.get_ranking_suggestions(
+        faculty_name=faculty, role=role, dept=dept, school=school,
+        year=year, programme=programme, batch=batch,
+        limit=limit, offset=offset
+    )
+
 # ── AWS Lambda Handler ────────────────────────────────────────
 handler = Mangum(app, lifespan="off")

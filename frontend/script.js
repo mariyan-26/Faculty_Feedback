@@ -1,5 +1,6 @@
 // ── CONFIG ────────────────────────────────────────────────────
-const API = 'https://kskwhahrj3xan44mglllrcal3i0caklx.lambda-url.ap-south-1.on.aws/api';
+//const API = 'https://kskwhahrj3xan44mglllrcal3i0caklx.lambda-url.ap-south-1.on.aws/api';
+const API = 'http://localhost:8000/api';
 
 // ── STATE ─────────────────────────────────────────────────────
 let SESSION = null;
@@ -15,6 +16,10 @@ let charts = {};
 
 let instSuggPage = 1;
 let instSuggTotal = 0;
+
+let rankSearch    = '';
+let rankCount     = 10;
+let rankExclusive = false;
 
 const COLORS = {
   'Very Good': '#4f8ef7', 'Good': '#3dd9c4',
@@ -876,17 +881,19 @@ function switchTab(type) {
   // Show/Hide sections
   document.getElementById('section-faculty').style.display = (type === 'faculty') ? 'block' : 'none';
   document.getElementById('section-institution').style.display = (type === 'institution') ? 'block' : 'none';
+  document.getElementById('section-rankings').style.display    = (type === 'rankings')    ? 'block' : 'none';
+
 
   // Toggle Button UI
   document.getElementById('tab-fac').classList.toggle('active', type === 'faculty');
   document.getElementById('tab-inst').classList.toggle('active', type === 'institution');
+  document.getElementById('tab-rank').classList.toggle('active', type === 'rankings');
+
 
   localStorage.setItem('active_tab', type);
-
-  if (type === 'institution') {
-    // CHANGE: Call the new data loader that handles filters
-    loadInstitutionalData();
-  }
+  
+  if (type === 'institution') loadInstitutionalData();
+  if (type === 'rankings')    loadRankings();
 }
 // renderInstitutionalChart is defined below — this duplicate removed
 
@@ -1199,4 +1206,196 @@ async function renderInstitutionalChart(data) {
     },
     plugins: [barLabelsPlugin]
   });
+}
+
+// ── FACULTY RANKINGS ──────────────────────────────────────────
+
+async function loadRankings() {
+  const f = getF();
+  const p = new URLSearchParams({
+    role:      f.role,
+    limit:     rankCount,
+    exclusive: rankExclusive,
+  });
+  if (f.dept)      p.set('dept',      f.dept);
+  if (f.school)    p.set('school',    f.school);
+  if (f.year)      p.set('year',      f.year);
+  if (f.programme) p.set('programme', f.programme);
+  if (f.batch)     p.set('batch',     f.batch);
+  if (rankSearch)  p.set('search',    rankSearch);
+
+  try {
+    const res  = await fetch(`${API}/faculty-rankings?${p}`);
+    const data = await res.json();
+    const totalFaculty = data.total_faculty || 0;
+
+    renderRankTable('rank-vg',    data.very_good,      'very_good_pct',      '#4f8ef7', 'Very Good',      totalFaculty);
+    renderRankTable('rank-good',  data.good,           'good_pct',           '#3dd9c4', 'Good',           totalFaculty);
+    renderRankTable('rank-sat',   data.satisfactory,   'satisfactory_pct',   '#f7c94f', 'Satisfactory',   totalFaculty);
+    renderRankTable('rank-unsat', data.unsatisfactory, 'unsatisfactory_pct', '#f75f5f', 'Unsatisfactory', totalFaculty);
+
+    ['rank-vg','rank-good','rank-sat','rank-unsat'].forEach(id => {
+      const badge = document.getElementById('badge-' + id);
+      if (badge) badge.textContent = rankCount >= 50 ? 'All' : `Top ${rankCount}`;
+    });
+  } catch(e) { console.warn('rankings error', e); }
+}
+
+function renderRankTable(containerId, rows, pctKey, color, label, totalFaculty) {
+  const el = document.getElementById(containerId);
+  if (!rows || !rows.length) {
+    el.innerHTML = '<div class="rank-empty">No data for current filters</div>';
+    return;
+  }
+
+  el.innerHTML = rows.map(r => {
+    const initials = (r.faculty_name || '')
+      .split(' ').filter(w => /^[A-Z]/.test(w)).map(w => w[0]).join('').slice(0, 2);
+    const isSearched = rankSearch &&
+      r.faculty_name.toLowerCase().includes(rankSearch.toLowerCase());
+
+    return `
+      <div class="rank-card ${isSearched ? 'rank-searched' : ''}">
+        <div class="rank-row">
+          <div class="rank-num">
+            #${r.rank}
+            ${isSearched ? `<span class="rank-of">of ${totalFaculty}</span>` : ''}
+          </div>
+          <div class="rank-avatar" style="background:${color}22;color:${color}">${initials}</div>
+          <div class="rank-info">
+            <div class="rank-name">${esc(r.faculty_name)}</div>
+            <div class="rank-meta">${esc(r.faculty_dept || '')} · ${esc(r.faculty_school || '')}</div>
+          </div>
+          <div class="rank-right">
+            <span class="rank-badge" style="background:${color}22;color:${color}">
+              ${r[pctKey]}% ${label}
+            </span>
+            <span class="rank-stats">⭐ ${r.avg_score}/4 · ${Number(r.total).toLocaleString()}</span>
+            <button class="rank-sugg-btn"
+              onclick="openRankModal('${encodeURIComponent(r.faculty_name)}')">
+              View suggestions
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── MODAL ─────────────────────────────────────────────────────
+let _modalFaculty = '';
+let _modalOffset  = 0;
+let _modalTotal   = 0;
+
+async function openRankModal(encodedFaculty) {
+  _modalFaculty = encodedFaculty;
+  _modalOffset  = 0;
+  _modalTotal   = 0;
+
+  const faculty = decodeURIComponent(encodedFaculty);
+  const initials = faculty.split(' ')
+    .filter(w => /^[A-Z]/.test(w)).map(w => w[0]).join('').slice(0, 2);
+
+  document.getElementById('rankModalName').textContent    = faculty;
+  document.getElementById('rankModalInitials').textContent = initials;
+  document.getElementById('rankModalSuggList').innerHTML  =
+    '<div style="color:var(--muted);font-size:13px;padding:10px 0">Loading…</div>';
+  document.getElementById('rankModalLoadMore').style.display = 'none';
+  document.getElementById('rankModal').style.display = 'flex';
+
+  await fetchModalSugg(true);
+}
+
+async function fetchModalSugg(initial) {
+  const f = getF();
+  const p = new URLSearchParams({
+    faculty: decodeURIComponent(_modalFaculty),
+    role:    f.role,
+    limit:   5,
+    offset:  _modalOffset,
+  });
+  if (f.dept)      p.set('dept',      f.dept);
+  if (f.school)    p.set('school',    f.school);
+  if (f.year)      p.set('year',      f.year);
+  if (f.programme) p.set('programme', f.programme);
+  if (f.batch)     p.set('batch',     f.batch);
+
+  try {
+    const res   = await fetch(`${API}/ranking-suggestions?${p}`);
+    const data  = await res.json();
+    _modalTotal = data.total || 0;
+    const items = data.items || [];
+
+    const list = document.getElementById('rankModalSuggList');
+    if (initial) list.innerHTML = '';
+
+    if (!items.length && initial) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:10px 0">No suggestions found.</div>';
+      document.getElementById('rankModalCount').textContent = '0 suggestions';
+      return;
+    }
+
+    document.getElementById('rankModalCount').textContent =
+      `${_modalTotal.toLocaleString()} suggestion${_modalTotal !== 1 ? 's' : ''}`;
+
+    items.forEach(s => {
+      const div = document.createElement('div');
+      div.className = 'rank-modal-sugg';
+      div.innerHTML = `
+        <div class="rank-modal-sugg-text">"${esc(s.answer_text)}"</div>
+        <div class="rank-modal-sugg-meta">
+          ${s.subject ? `<span>📖 ${esc(s.subject)}</span>` : ''}
+          <span>📚 ${esc(s.student_batch || '')}</span>
+        </div>`;
+      list.appendChild(div);
+    });
+
+    _modalOffset += items.length;
+    const remaining = _modalTotal - _modalOffset;
+    const btn = document.getElementById('rankModalLoadMore');
+    btn.style.display   = remaining > 0 ? 'block' : 'none';
+    btn.textContent     = `Load more (${remaining} remaining)`;
+
+  } catch(e) {
+    document.getElementById('rankModalSuggList').innerHTML =
+      '<div style="color:var(--muted);font-size:13px">Failed to load suggestions.</div>';
+  }
+}
+
+function closeRankModal() {
+  document.getElementById('rankModal').style.display = 'none';
+}
+
+// ── RANKINGS CONTROLS ─────────────────────────────────────────
+
+function onRankSearch(val) {
+  rankSearch = val;
+  clearTimeout(window._rankSearchTimer);
+  window._rankSearchTimer = setTimeout(loadRankings, 350);
+}
+
+function onRankCountSlider(val) {
+  rankCount = parseInt(val);
+  document.getElementById('rankCountVal').textContent = `${val} faculty`;
+  document.querySelectorAll('.rank-pill').forEach(p => {
+    p.classList.toggle('active', parseInt(p.dataset.val) === rankCount);
+  });
+  loadRankings();
+}
+
+function setRankCount(val, btn) {
+  rankCount = val;
+  document.getElementById('rankCountSlider').value        = val > 50 ? 50 : val;
+  document.getElementById('rankCountVal').textContent     = val >= 50 ? 'All faculty' : `${val} faculty`;
+  document.querySelectorAll('.rank-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  loadRankings();
+}
+
+function toggleRankExclusive() {
+  rankExclusive = !rankExclusive;
+  const track = document.getElementById('rankExcToggle');
+  track.classList.toggle('on', rankExclusive);
+  document.getElementById('rankExcLabel').textContent =
+    `Exclusive mode: ${rankExclusive ? 'ON' : 'OFF'}`;
+  loadRankings();
 }

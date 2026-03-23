@@ -9,8 +9,8 @@ from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
 from typing import Optional
 
-#from dotenv import load_dotenv
-#load_dotenv()
+from dotenv import load_dotenv
+load_dotenv()
 
 # ── connection ─────────────────────────────────────────────────
 DB_URL = os.getenv("DATABASE_URL")
@@ -573,3 +573,107 @@ def get_institutional_distribution(**kwargs):
             AND is_suggestion = FALSE
         """, params)
         return dict(cur.fetchone())
+
+
+def get_faculty_rankings(role="admin", dept=None, school=None, year=None,
+                         programme=None, batch=None, limit=10, search=None,
+                         exclusive=False):
+    where, params = build_where(role=role, dept=dept, school=school,
+                                year=year, programme=programme, batch=batch)
+    query = f"""
+        SELECT
+            faculty_name, faculty_dept, faculty_school,
+            COUNT(*) FILTER (WHERE selected_option IN ('Very Good','Good','Satisfactory','Unsatisfactory')) AS total,
+            COUNT(*) FILTER (WHERE selected_option = 'Very Good')      AS very_good,
+            COUNT(*) FILTER (WHERE selected_option = 'Good')           AS good,
+            COUNT(*) FILTER (WHERE selected_option = 'Satisfactory')   AS satisfactory,
+            COUNT(*) FILTER (WHERE selected_option = 'Unsatisfactory') AS unsatisfactory,
+            ROUND(AVG(score) FILTER (
+                WHERE selected_option IN ('Very Good','Good','Satisfactory','Unsatisfactory')
+            ), 2) AS avg_score
+        FROM feedback
+        {where}
+        AND is_suggestion = FALSE
+        AND selected_option IN ('Very Good','Good','Satisfactory','Unsatisfactory')
+        AND faculty_name IS NOT NULL AND faculty_name != ''
+    """
+    if search:
+        query += " AND LOWER(faculty_name) LIKE LOWER(%s)"
+        params.append(f"%{search}%")
+    query += " GROUP BY faculty_name, faculty_dept, faculty_school HAVING COUNT(*) > 0"
+
+    with cursor() as cur:
+        cur.execute(query, params)
+        rows = [dict(r) for r in cur.fetchall()]
+
+    for r in rows:
+        t = r['total'] or 1
+        r['very_good_pct']      = round(r['very_good']      / t * 100, 1)
+        r['good_pct']           = round(r['good']           / t * 100, 1)
+        r['satisfactory_pct']   = round(r['satisfactory']   / t * 100, 1)
+        r['unsatisfactory_pct'] = round(r['unsatisfactory'] / t * 100, 1)
+
+    # Build four fully ranked lists with global rank position
+    vg_sorted    = sorted(rows, key=lambda x: x['very_good_pct'],      reverse=True)
+    good_sorted  = sorted(rows, key=lambda x: x['good_pct'],           reverse=True)
+    sat_sorted   = sorted(rows, key=lambda x: x['satisfactory_pct'],   reverse=True)
+    unsat_sorted = sorted(rows, key=lambda x: x['unsatisfactory_pct'], reverse=True)
+
+    total_count = len(rows)
+
+    def attach_rank(lst):
+        for i, r in enumerate(lst):
+            r['rank']  = i + 1
+            r['total_faculty'] = total_count
+        return lst
+
+    attach_rank(vg_sorted)
+    attach_rank(good_sorted)
+    attach_rank(sat_sorted)
+    attach_rank(unsat_sorted)
+
+    if exclusive:
+        assigned = set()
+        def excl_filter(lst):
+            out = []
+            for r in lst:
+                if r['faculty_name'] not in assigned:
+                    assigned.add(r['faculty_name'])
+                    out.append(r)
+            return out
+        vg_sorted    = excl_filter(vg_sorted)
+        good_sorted  = excl_filter(good_sorted)
+        sat_sorted   = excl_filter(sat_sorted)
+        unsat_sorted = excl_filter(unsat_sorted)
+
+    return {
+        "total_faculty": total_count,
+        "very_good":      vg_sorted[:limit],
+        "good":           good_sorted[:limit],
+        "satisfactory":   sat_sorted[:limit],
+        "unsatisfactory": unsat_sorted[:limit],
+    }
+
+
+def get_ranking_suggestions(faculty_name, role="admin", dept=None, school=None,
+                             year=None, programme=None, batch=None, limit=5, offset=0):
+    where, params = build_where(role=role, dept=dept, school=school,
+                                year=year, programme=programme, batch=batch)
+    with cursor() as cur:
+        cur.execute(f"""
+            SELECT COUNT(*) AS cnt FROM feedback {where}
+            AND faculty_name = %s AND is_suggestion = TRUE
+            AND answer_text IS NOT NULL AND LENGTH(TRIM(answer_text)) > 15
+        """, params + [faculty_name])
+        total = cur.fetchone()['cnt']
+
+        cur.execute(f"""
+            SELECT answer_text, student_batch, subject FROM feedback {where}
+            AND faculty_name = %s AND is_suggestion = TRUE
+            AND answer_text IS NOT NULL AND LENGTH(TRIM(answer_text)) > 15
+            ORDER BY LENGTH(answer_text) DESC
+            LIMIT %s OFFSET %s
+        """, params + [faculty_name, limit, offset])
+        items = [dict(r) for r in cur.fetchall()]
+
+    return {"total": total, "items": items}
