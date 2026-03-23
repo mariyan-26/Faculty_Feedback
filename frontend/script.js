@@ -1,6 +1,4 @@
 // ── CONFIG ────────────────────────────────────────────────────
-//const API = '/api';
-//const API = 'https://radiosensitive-reed-contrate.ngrok-free.dev/api';
 const API = 'https://kskwhahrj3xan44mglllrcal3i0caklx.lambda-url.ap-south-1.on.aws/api';
 
 // ── STATE ─────────────────────────────────────────────────────
@@ -189,11 +187,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('fSch').disabled = true;
         document.getElementById('fDep').disabled = true;
       } else if (SESSION.role === 'dean') {
-        //document.getElementById('hodnote').style.display = 'block';
-        //document.getElementById('hodnote').textContent = '🔒 Viewing data scoped to your school only.';
         document.getElementById('fSch').disabled = true;
       }
       document.querySelector('.upload-lbl').style.display = SESSION.upload ? 'flex' : 'none';
+
+      // ── Reset state on auto-login ─────────────────────────
+      selectedFac = ''; selectedBatch = ''; selectedPro = '';
+      F = {};
+      suggPage = 1;
+      instSuggPage = 1;
+      ['fYr', 'fRat'].forEach(id => document.getElementById(id).value = '');
+      ['fac_si', 'pro_si', 'bsi'].forEach(id => document.getElementById(id).value = '');
+      Object.keys(charts).forEach(k => { if (charts[k]) { charts[k].destroy(); delete charts[k]; } });
+      // ─────────────────────────────────────────────────────
+
       await loadFilters();
       renderAll();
       const savedTab = localStorage.getItem('active_tab') || 'faculty';
@@ -848,6 +855,23 @@ async function uploadCSV(input) {
   input.value = '';
 }
 
+function resetInstFilters() {
+  // Clear all 3 dropdowns
+  ['inst-school-filter', 'inst-dept-filter', 'inst-batch-filter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
+  // If Dean — lock school back to their scoped school
+  if (SESSION?.role === 'dean' && SESSION?.school) {
+    const schoolEl = document.getElementById('inst-school-filter');
+    if (schoolEl) schoolEl.value = SESSION.school;
+  }
+
+  // Reload institutional data with reset filters
+  loadInstitutionalData();
+}
+
 function switchTab(type) {
   // Show/Hide sections
   document.getElementById('section-faculty').style.display = (type === 'faculty') ? 'block' : 'none';
@@ -943,10 +967,12 @@ async function loadInstSuggestions(reset = false) {
   const schoolVal = document.getElementById('inst-school-filter')?.value || '';
   const deptVal = document.getElementById('inst-dept-filter')?.value || '';
   const batchVal = document.getElementById('inst-batch-filter')?.value || '';
-  const role = window.userRole || 'admin';
+  const role = SESSION?.role || 'admin';
+  const uSchool = SESSION?.school || '';
 
   const params = new URLSearchParams({
-    role, school: schoolVal, dept: deptVal, batch: batchVal,
+    role, school: schoolVal || uSchool,  
+    dept: deptVal, batch: batchVal,
     limit: 5,
     offset: (instSuggPage - 1) * 5
   });
@@ -1002,8 +1028,8 @@ function changeInstSuggPage(dir) {
 function renderInstDistribution(data) {
   // A. Render Donut Chart with Survey Labels
   const ctx = document.getElementById('instDonutChart').getContext('2d');
-  if (window.charts && window.charts['instDonut']) window.charts['instDonut'].destroy();
-
+  if (window.charts && window.charts['instDonut']) { window.charts['instDonut'].destroy(); delete window.charts['instDonut']; }
+  if (charts && charts['instDonut']) { charts['instDonut'].destroy(); delete charts['instDonut']; }
   // Map backend keys to human-readable labels and impactful colors
   const surveyLabels = ['Strongly Agree', 'Agree', 'Neutral', 'Disagree'];
   const surveyCounts = [
@@ -1014,7 +1040,7 @@ function renderInstDistribution(data) {
   ];
 
   window.charts = window.charts || {};
-  window.charts['instDonut'] = new Chart(ctx, {
+  charts['instDonut'] = new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: surveyLabels,
@@ -1114,7 +1140,9 @@ function toggleInstQuestions() {
 
 async function renderInstitutionalChart(data) {
   const ctx = document.getElementById('instChart').getContext('2d');
-  if (window.charts && window.charts['instChart']) window.charts['instChart'].destroy();
+  window.charts = window.charts || {};
+  if (charts['instChart']) { charts['instChart'].destroy(); delete charts['instChart']; }
+  if (window.charts?.['instChart']) { window.charts['instChart'].destroy(); delete window.charts['instChart']; }
 
   // Use getVar() so Chart.js receives actual computed hex values, not CSS var strings
   // (Chart.js cannot resolve CSS custom properties on its own)
@@ -1136,7 +1164,7 @@ async function renderInstitutionalChart(data) {
     }
   };
 
-  window.charts['instChart'] = new Chart(ctx, {
+  charts['instChart'] = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: data.map(d => d.label),

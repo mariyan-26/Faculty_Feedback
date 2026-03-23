@@ -9,8 +9,8 @@ from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
 from typing import Optional
 
-from dotenv import load_dotenv
-load_dotenv()
+#from dotenv import load_dotenv
+#load_dotenv()
 
 # ── connection ─────────────────────────────────────────────────
 DB_URL = os.getenv("DATABASE_URL")

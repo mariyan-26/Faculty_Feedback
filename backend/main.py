@@ -1,14 +1,14 @@
 """
 Faculty Feedback Dashboard — FastAPI Backend
 Local: uvicorn main:app --reload --port 8000
-AWS:   handler = Mangum(app) — used by Lambda
+AWS:   Docker container on ECS — uvicorn main:app --host 0.0.0.0 --port 8000
 """
 from fastapi import FastAPI, Query, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
-from mangum import Mangum
 import database as db
 import csv_loader
+from mangum import Mangum
 import os
 
 app = FastAPI(title="Faculty Feedback API", version="1.0.0")
@@ -215,17 +215,14 @@ async def faculty_info(
 
 
 # ── CSV upload ────────────────────────────────────────────────
-# NOTE: API Gateway has a 10MB limit.
-# Large CSVs (>10MB) must be uploaded via S3 presigned URL.
-# AWS team will configure S3 trigger for production.
-# This endpoint works for local development only.
+# ECS has no file size limit — all CSV sizes supported
 @app.post("/api/upload-csv")
 async def upload_csv(file: UploadFile = File(...)):
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files accepted")
     content = await file.read()
     text = content.decode("utf-8-sig", errors="replace")
-    result = csv_loader.load_csv(text)
+    result = csv_loader.load_csv(text, filename=file.filename)
     return result
 
 
@@ -326,8 +323,5 @@ async def inst_distribution(
         role=role, dept=dept, school=school, batch=batch
     )
 
-
 # ── AWS Lambda Handler ────────────────────────────────────────
-# Mangum wraps FastAPI for AWS Lambda + API Gateway
-# Ignored during local development — uvicorn uses `app` directly
 handler = Mangum(app, lifespan="off")
