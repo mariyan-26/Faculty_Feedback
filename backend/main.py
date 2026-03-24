@@ -333,13 +333,15 @@ async def faculty_rankings(
     programme: Optional[str] = Query(None),
     batch: Optional[str] = Query(None),
     limit: int = Query(10),
+    offset: int = Query(0),  # ✅ FIXED
     search: Optional[str] = Query(None),
     exclusive: bool = Query(False),
 ):
     return db.get_faculty_rankings(
         role=role, dept=dept, school=school,
         year=year, programme=programme, batch=batch,
-        limit=limit, search=search, exclusive=exclusive
+        limit=limit, offset=offset,
+        search=search, exclusive=exclusive
     )
 
 

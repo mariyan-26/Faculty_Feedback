@@ -575,11 +575,16 @@ def get_institutional_distribution(**kwargs):
         return dict(cur.fetchone())
 
 
-def get_faculty_rankings(role="admin", dept=None, school=None, year=None,
-                         programme=None, batch=None, limit=10, search=None,
-                         exclusive=False):
-    where, params = build_where(role=role, dept=dept, school=school,
-                                year=year, programme=programme, batch=batch)
+def get_faculty_rankings(
+    role="admin", dept=None, school=None, year=None,
+    programme=None, batch=None, limit=10, offset=0,
+    search=None, exclusive=False
+):
+    where, params = build_where(
+        role=role, dept=dept, school=school,
+        year=year, programme=programme, batch=batch
+    )
+
     query = f"""
         SELECT
             faculty_name, faculty_dept, faculty_school,
@@ -596,16 +601,15 @@ def get_faculty_rankings(role="admin", dept=None, school=None, year=None,
         AND is_suggestion = FALSE
         AND selected_option IN ('Very Good','Good','Satisfactory','Unsatisfactory')
         AND faculty_name IS NOT NULL AND faculty_name != ''
+        GROUP BY faculty_name, faculty_dept, faculty_school
+        HAVING COUNT(*) > 0
     """
-    if search:
-        query += " AND LOWER(faculty_name) LIKE LOWER(%s)"
-        params.append(f"%{search}%")
-    query += " GROUP BY faculty_name, faculty_dept, faculty_school HAVING COUNT(*) > 0"
 
     with cursor() as cur:
         cur.execute(query, params)
         rows = [dict(r) for r in cur.fetchall()]
 
+    # ── Calculate percentages ──────────────────────────────────
     for r in rows:
         t = r['total'] or 1
         r['very_good_pct']      = round(r['very_good']      / t * 100, 1)
@@ -613,7 +617,7 @@ def get_faculty_rankings(role="admin", dept=None, school=None, year=None,
         r['satisfactory_pct']   = round(r['satisfactory']   / t * 100, 1)
         r['unsatisfactory_pct'] = round(r['unsatisfactory'] / t * 100, 1)
 
-    # Build four fully ranked lists with global rank position
+    # ── Sort (global ranking) ──────────────────────────────────
     vg_sorted    = sorted(rows, key=lambda x: x['very_good_pct'],      reverse=True)
     good_sorted  = sorted(rows, key=lambda x: x['good_pct'],           reverse=True)
     sat_sorted   = sorted(rows, key=lambda x: x['satisfactory_pct'],   reverse=True)
@@ -621,19 +625,25 @@ def get_faculty_rankings(role="admin", dept=None, school=None, year=None,
 
     total_count = len(rows)
 
+    # ── Attach global rank ─────────────────────────────────────
     def attach_rank(lst):
+        result = []
         for i, r in enumerate(lst):
-            r['rank']  = i + 1
-            r['total_faculty'] = total_count
-        return lst
+            r_copy = dict(r)           # ← copy so other lists aren't overwritten
+            r_copy['rank'] = i + 1
+            r_copy['total_faculty'] = total_count
+            result.append(r_copy)
+        return result
 
-    attach_rank(vg_sorted)
-    attach_rank(good_sorted)
-    attach_rank(sat_sorted)
-    attach_rank(unsat_sorted)
+    vg_sorted    = attach_rank(vg_sorted)
+    good_sorted  = attach_rank(good_sorted)
+    sat_sorted   = attach_rank(sat_sorted)
+    unsat_sorted = attach_rank(unsat_sorted)
 
+    # ── Exclusive filtering (after ranking) ────────────────────
     if exclusive:
         assigned = set()
+
         def excl_filter(lst):
             out = []
             for r in lst:
@@ -641,18 +651,40 @@ def get_faculty_rankings(role="admin", dept=None, school=None, year=None,
                     assigned.add(r['faculty_name'])
                     out.append(r)
             return out
+
         vg_sorted    = excl_filter(vg_sorted)
         good_sorted  = excl_filter(good_sorted)
         sat_sorted   = excl_filter(sat_sorted)
         unsat_sorted = excl_filter(unsat_sorted)
 
+    # ── Search (AFTER ranking — IMPORTANT FIX) ─────────────────
+    def apply_search(lst):
+        if not search:
+            return lst
+        s = search.lower()
+        return [
+            r for r in lst
+            if s in (r['faculty_name'] or '').lower()
+        ]
+
+    vg_sorted    = apply_search(vg_sorted)
+    good_sorted  = apply_search(good_sorted)
+    sat_sorted   = apply_search(sat_sorted)
+    unsat_sorted = apply_search(unsat_sorted)
+
+    # ── Pagination ─────────────────────────────────────────────
+    def paginate(lst):
+        return lst[offset: offset + limit]
+
     return {
         "total_faculty": total_count,
-        "very_good":      vg_sorted[:limit],
-        "good":           good_sorted[:limit],
-        "satisfactory":   sat_sorted[:limit],
-        "unsatisfactory": unsat_sorted[:limit],
+        "filtered_count": len(unsat_sorted),  # optional (useful for UI)
+        "very_good":      paginate(vg_sorted),
+        "good":           paginate(good_sorted),
+        "satisfactory":   paginate(sat_sorted),
+        "unsatisfactory": paginate(unsat_sorted),
     }
+
 
 
 def get_ranking_suggestions(faculty_name, role="admin", dept=None, school=None,

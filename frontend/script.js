@@ -20,6 +20,9 @@ let instSuggTotal = 0;
 let rankSearch    = '';
 let rankCount     = 10;
 let rankExclusive = false;
+let rankCat       = 'unsat';
+let rankPage = 1;
+let lastTotalFaculty = 0;
 
 const COLORS = {
   'Very Good': '#4f8ef7', 'Good': '#3dd9c4',
@@ -893,7 +896,7 @@ function switchTab(type) {
   localStorage.setItem('active_tab', type);
   
   if (type === 'institution') loadInstitutionalData();
-  if (type === 'rankings')    loadRankings();
+  if (type === 'rankings') { buildRankGrid(); loadRankings(); }
 }
 // renderInstitutionalChart is defined below — this duplicate removed
 
@@ -1212,73 +1215,132 @@ async function renderInstitutionalChart(data) {
 
 async function loadRankings() {
   const f = getF();
-  const p = new URLSearchParams({
-    role:      f.role,
-    limit:     rankCount,
-    exclusive: rankExclusive,
-  });
-  if (f.dept)      p.set('dept',      f.dept);
-  if (f.school)    p.set('school',    f.school);
-  if (f.year)      p.set('year',      f.year);
-  if (f.programme) p.set('programme', f.programme);
-  if (f.batch)     p.set('batch',     f.batch);
-  if (rankSearch)  p.set('search',    rankSearch);
 
-  try {
-    const res  = await fetch(`${API}/faculty-rankings?${p}`);
-    const data = await res.json();
-    const totalFaculty = data.total_faculty || 0;
+  const catsToLoad = rankCat === 'all'
+    ? ['vg', 'good', 'sat', 'unsat']
+    : [rankCat];
 
-    renderRankTable('rank-vg',    data.very_good,      'very_good_pct',      '#4f8ef7', 'Very Good',      totalFaculty);
-    renderRankTable('rank-good',  data.good,           'good_pct',           '#3dd9c4', 'Good',           totalFaculty);
-    renderRankTable('rank-sat',   data.satisfactory,   'satisfactory_pct',   '#f7c94f', 'Satisfactory',   totalFaculty);
-    renderRankTable('rank-unsat', data.unsatisfactory, 'unsatisfactory_pct', '#f75f5f', 'Unsatisfactory', totalFaculty);
+  const grid = document.getElementById('rankGrid');
+  grid.style.gridTemplateColumns = rankCat === 'all'
+    ? 'repeat(auto-fit, minmax(300px, 1fr))'
+    : '1fr';
 
-    ['rank-vg','rank-good','rank-sat','rank-unsat'].forEach(id => {
-      const badge = document.getElementById('badge-' + id);
-      if (badge) badge.textContent = rankCount >= 50 ? 'All' : `Top ${rankCount}`;
+  let totalFaculty = 0; // ✅ store once
+
+  for (const [index, cat] of catsToLoad.entries()) {
+    const p = new URLSearchParams({
+      role:      f.role,
+      limit:     rankCount,
+      offset:    (rankPage - 1) * rankCount,
+      exclusive: rankExclusive,
     });
-  } catch(e) { console.warn('rankings error', e); }
+
+    if (f.dept)      p.set('dept',      f.dept);
+    if (f.school)    p.set('school',    f.school);
+    if (f.year)      p.set('year',      f.year);
+    if (f.programme) p.set('programme', f.programme);
+    if (f.batch)     p.set('batch',     f.batch);
+    if (rankSearch)  p.set('search',    rankSearch);
+
+    try {
+      const res  = await fetch(`${API}/faculty-rankings?${p}`);
+      const data = await res.json();
+
+      if (index === 0) {
+        totalFaculty = data.total_faculty || 0;
+        lastTotalFaculty = totalFaculty; // ✅ store globally
+        renderPagination(totalFaculty);  // ✅ call once
+      }
+
+      const catMap = {
+        vg:    { rows: data.very_good,      pctKey: 'very_good_pct',      color: '#4f8ef7', label: 'Very Good' },
+        good:  { rows: data.good,           pctKey: 'good_pct',           color: '#3dd9c4', label: 'Good' },
+        sat:   { rows: data.satisfactory,   pctKey: 'satisfactory_pct',   color: '#f7c94f', label: 'Satisfactory' },
+        unsat: { rows: data.unsatisfactory, pctKey: 'unsatisfactory_pct', color: '#f75f5f', label: 'Unsatisfactory' },
+      };
+
+      renderRankCard(cat, catMap[cat], totalFaculty);
+
+    } catch(e) {
+      console.warn('rankings error', e);
+    }
+  }
 }
 
-function renderRankTable(containerId, rows, pctKey, color, label, totalFaculty) {
-  const el = document.getElementById(containerId);
+function renderRankCard(catKey, catData, totalFaculty) {
+  const container = document.getElementById(`rank-card-${catKey}`);
+  if (!container) return;
+
+  const { rows, pctKey, color, label, title } = catData;
+  const badge = container.querySelector('.rank-count-badge');
+  if (badge) badge.textContent = rankCount >= 50 ? 'All' : `Top ${rankCount}`;
+
+  const listEl = container.querySelector('.rank-list');
   if (!rows || !rows.length) {
-    el.innerHTML = '<div class="rank-empty">No data for current filters</div>';
+    listEl.innerHTML = '<div class="rank-empty">No data for current filters</div>';
     return;
   }
 
-  el.innerHTML = rows.map(r => {
-    const initials = (r.faculty_name || '')
+  listEl.innerHTML = rows.map((r, i) => {
+    const initials  = (r.faculty_name || '')
       .split(' ').filter(w => /^[A-Z]/.test(w)).map(w => w[0]).join('').slice(0, 2);
     const isSearched = rankSearch &&
       r.faculty_name.toLowerCase().includes(rankSearch.toLowerCase());
 
     return `
-      <div class="rank-card ${isSearched ? 'rank-searched' : ''}">
-        <div class="rank-row">
-          <div class="rank-num">
-            #${r.rank}
-            ${isSearched ? `<span class="rank-of">of ${totalFaculty}</span>` : ''}
-          </div>
-          <div class="rank-avatar" style="background:${color}22;color:${color}">${initials}</div>
-          <div class="rank-info">
-            <div class="rank-name">${esc(r.faculty_name)}</div>
-            <div class="rank-meta">${esc(r.faculty_dept || '')} · ${esc(r.faculty_school || '')}</div>
-          </div>
-          <div class="rank-right">
-            <span class="rank-badge" style="background:${color}22;color:${color}">
-              ${r[pctKey]}% ${label}
-            </span>
-            <span class="rank-stats">⭐ ${r.avg_score}/4 · ${Number(r.total).toLocaleString()}</span>
-            <button class="rank-sugg-btn"
-              onclick="openRankModal('${encodeURIComponent(r.faculty_name)}')">
-              View suggestions
-            </button>
-          </div>
+      <div class="rank-row-item ${isSearched ? 'rank-searched' : ''}">
+        <div class="rank-num-block">
+          <span class="rank-cat-num" style="color:${color}">#${(rankPage - 1) * rankCount + i + 1}</span>
+          <span class="rank-global-num">${r.rank} of ${totalFaculty}</span>
+          ${isSearched ? `<span class="rank-of-total">of ${totalFaculty}</span>` : ''}
+        </div>
+        <div class="rank-av" style="background:${color}22;color:${color}">${initials}</div>
+        <div class="rank-info">
+          <div class="rank-name">${esc(r.faculty_name)}</div>
+          <div class="rank-meta">${esc(r.faculty_dept || '')} · ${esc(r.faculty_school || '')}</div>
+        </div>
+        <div class="rank-right">
+          <span class="rank-badge-pill" style="background:${color}22;color:${color}">
+            ${r[pctKey]}% · ${Number(r[label.toLowerCase().replace(' ', '_')] || r['very_good'] || 0).toLocaleString()} ${label}
+          </span>
+          <span class="rank-stat-line">⭐ ${r.avg_score}/4 · ${Number(r.total).toLocaleString()} total</span>
+          <button class="rank-view-sugg-btn"
+            onclick="openRankModal('${encodeURIComponent(r.faculty_name)}', '${color}', '${esc(r.faculty_dept || '')}', '${esc(r.faculty_school || '')}', ${r.avg_score}, ${r.total}, ${r.rank}, ${r[pctKey]}, '${label}', ${totalFaculty})"
+            View suggestions
+          </button>
         </div>
       </div>`;
   }).join('');
+}
+
+function buildRankGrid() {
+  const grid = document.getElementById('rankGrid');
+  grid.innerHTML = '';
+
+  const catDefs = [
+    { key: 'unsat', color: '#f75f5f', title: 'Top by Unsatisfactory %' },
+    { key: 'sat',   color: '#f7c94f', title: 'Top by Satisfactory %'   },
+    { key: 'good',  color: '#3dd9c4', title: 'Top by Good %'           },
+    { key: 'vg',    color: '#4f8ef7', title: 'Top by Very Good %'      },
+  ];
+
+  const toShow = rankCat === 'all' ? catDefs : [catDefs.find(c => c.key === rankCat)];
+
+  toShow.forEach(cat => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.id = `rank-card-${cat.key}`;
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2)">
+        <span style="width:10px;height:10px;border-radius:50%;background:${cat.color};display:inline-block;flex-shrink:0"></span>
+        <span style="font-size:13px;font-weight:600;color:var(--text)">${cat.title}</span>
+        <span class="rank-count-badge" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:8px;background:${cat.color}22;color:${cat.color};font-weight:600">
+          Top ${rankCount}
+        </span>
+      </div>
+      <div class="rank-list"></div>`;
+    grid.appendChild(card);
+  });
 }
 
 // ── MODAL ─────────────────────────────────────────────────────
@@ -1286,23 +1348,33 @@ let _modalFaculty = '';
 let _modalOffset  = 0;
 let _modalTotal   = 0;
 
-async function openRankModal(encodedFaculty) {
+function openRankModal(encodedFaculty, color, dept, school, avg, total, globalRank, pct, label, totalFaculty) {
   _modalFaculty = encodedFaculty;
   _modalOffset  = 0;
   _modalTotal   = 0;
 
-  const faculty = decodeURIComponent(encodedFaculty);
+  const faculty  = decodeURIComponent(encodedFaculty);
   const initials = faculty.split(' ')
     .filter(w => /^[A-Z]/.test(w)).map(w => w[0]).join('').slice(0, 2);
 
-  document.getElementById('rankModalName').textContent    = faculty;
-  document.getElementById('rankModalInitials').textContent = initials;
-  document.getElementById('rankModalSuggList').innerHTML  =
+  document.getElementById('rankModalInitials').textContent    = initials;
+  document.getElementById('rankModalInitials').style.background = color + '22';
+  document.getElementById('rankModalInitials').style.color      = color;
+  document.getElementById('rankModalName').textContent         = faculty;
+  document.getElementById('rankModalDept').textContent         = `${dept} · ${school}`;
+  document.getElementById('rankModalMeta').innerHTML           = `
+    <span>⭐ ${avg}/4</span>
+    <span>${Number(total).toLocaleString()} total responses</span>
+    <span style="background:${color}22;color:${color};padding:2px 8px;border-radius:8px;font-size:11px;font-weight:500">
+      Rank ${globalRank} of ${totalFaculty} · ${pct}% ${label}
+    </span>`;
+  document.getElementById('rankModalSuggList').innerHTML       =
     '<div style="color:var(--muted);font-size:13px;padding:10px 0">Loading…</div>';
-  document.getElementById('rankModalLoadMore').style.display = 'none';
-  document.getElementById('rankModal').style.display = 'flex';
+  document.getElementById('rankModalCount').textContent        = '';
+  document.getElementById('rankModalLoadMore').style.display   = 'none';
+  document.getElementById('rankModal').style.display           = 'flex';
 
-  await fetchModalSugg(true);
+  fetchModalSugg(true);
 }
 
 async function fetchModalSugg(initial) {
@@ -1328,14 +1400,14 @@ async function fetchModalSugg(initial) {
     const list = document.getElementById('rankModalSuggList');
     if (initial) list.innerHTML = '';
 
+    document.getElementById('rankModalCount').textContent =
+      `${_modalTotal.toLocaleString()} student suggestion${_modalTotal !== 1 ? 's' : ''}`;
+
     if (!items.length && initial) {
-      list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:10px 0">No suggestions found.</div>';
-      document.getElementById('rankModalCount').textContent = '0 suggestions';
+      list.innerHTML =
+        '<div style="color:var(--muted);font-size:13px;padding:10px 0">No suggestions found for this faculty.</div>';
       return;
     }
-
-    document.getElementById('rankModalCount').textContent =
-      `${_modalTotal.toLocaleString()} suggestion${_modalTotal !== 1 ? 's' : ''}`;
 
     items.forEach(s => {
       const div = document.createElement('div');
@@ -1343,8 +1415,8 @@ async function fetchModalSugg(initial) {
       div.innerHTML = `
         <div class="rank-modal-sugg-text">"${esc(s.answer_text)}"</div>
         <div class="rank-modal-sugg-meta">
-          ${s.subject ? `<span>📖 ${esc(s.subject)}</span>` : ''}
-          <span>📚 ${esc(s.student_batch || '')}</span>
+          ${s.subject   ? `<span>📖 ${esc(s.subject)}</span>`        : ''}
+          ${s.student_batch ? `<span>📚 ${esc(s.student_batch)}</span>` : ''}
         </div>`;
       list.appendChild(div);
     });
@@ -1352,8 +1424,8 @@ async function fetchModalSugg(initial) {
     _modalOffset += items.length;
     const remaining = _modalTotal - _modalOffset;
     const btn = document.getElementById('rankModalLoadMore');
-    btn.style.display   = remaining > 0 ? 'block' : 'none';
-    btn.textContent     = `Load more (${remaining} remaining)`;
+    btn.style.display = remaining > 0 ? 'block' : 'none';
+    btn.textContent   = `Load more (${remaining} remaining)`;
 
   } catch(e) {
     document.getElementById('rankModalSuggList').innerHTML =
@@ -1367,15 +1439,26 @@ function closeRankModal() {
 
 // ── RANKINGS CONTROLS ─────────────────────────────────────────
 
+function setRankCat(key, btn) {
+  rankCat = key;
+  rankPage = 1; // ✅ FIX
+  document.querySelectorAll('.rank-cat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  buildRankGrid();
+  loadRankings();
+}
+
 function onRankSearch(val) {
   rankSearch = val;
+  rankPage = 1;
   clearTimeout(window._rankSearchTimer);
   window._rankSearchTimer = setTimeout(loadRankings, 350);
 }
 
 function onRankCountSlider(val) {
   rankCount = parseInt(val);
-  document.getElementById('rankCountVal').textContent = `${val} faculty`;
+  rankPage = 1;
+  document.getElementById('rankCountVal').textContent = `${val} per page`; // ✅ FIX
   document.querySelectorAll('.rank-pill').forEach(p => {
     p.classList.toggle('active', parseInt(p.dataset.val) === rankCount);
   });
@@ -1384,8 +1467,9 @@ function onRankCountSlider(val) {
 
 function setRankCount(val, btn) {
   rankCount = val;
-  document.getElementById('rankCountSlider').value        = val > 50 ? 50 : val;
-  document.getElementById('rankCountVal').textContent     = val >= 50 ? 'All faculty' : `${val} faculty`;
+  rankPage = 1;
+  document.getElementById('rankCountSlider').value = val > 50 ? 50 : val;
+  document.getElementById('rankCountVal').textContent = `${val} per page`; // ✅ FIX
   document.querySelectorAll('.rank-pill').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   loadRankings();
@@ -1396,6 +1480,81 @@ function toggleRankExclusive() {
   const track = document.getElementById('rankExcToggle');
   track.classList.toggle('on', rankExclusive);
   document.getElementById('rankExcLabel').textContent =
-    `Exclusive mode: ${rankExclusive ? 'ON' : 'OFF'}`;
+    `Exclusive: ${rankExclusive ? 'ON' : 'OFF'}`;
+  loadRankings();
+}
+
+function renderPagination(totalFaculty) {
+  const totalPages = Math.ceil(totalFaculty / rankCount);
+  const container = document.getElementById('rankPagination');
+
+  if (totalPages <= 1) {
+    container.innerHTML = '';
+    return;
+  }
+
+  if (rankPage > totalPages) rankPage = totalPages;
+
+  let html = '';
+
+  // Prev button
+  html += `
+    <button class="rank-page-btn"
+      onclick="changePage(${rankPage - 1})"
+      ${rankPage === 1 ? 'disabled' : ''}>
+      ‹
+    </button>
+  `;
+
+  const pages = [];
+
+  // Always show first
+  pages.push(1);
+
+  // Window around current page
+  for (let i = rankPage - 2; i <= rankPage + 2; i++) {
+    if (i > 1 && i < totalPages) pages.push(i);
+  }
+
+  // Always show last
+  if (totalPages > 1) pages.push(totalPages);
+
+  // Remove duplicates + sort
+  const uniquePages = [...new Set(pages)].sort((a, b) => a - b);
+
+  let prev = 0;
+
+  uniquePages.forEach(p => {
+    if (p - prev > 1) {
+      html += `<span class="rank-page-ellipsis">…</span>`;
+    }
+
+    html += `
+      <button class="rank-page-btn ${p === rankPage ? 'active' : ''}"
+        onclick="changePage(${p})">
+        ${p}
+      </button>
+    `;
+
+    prev = p;
+  });
+
+  // Next button
+  html += `
+    <button class="rank-page-btn"
+      onclick="changePage(${rankPage + 1})"
+      ${rankPage === totalPages ? 'disabled' : ''}>
+      ›
+    </button>
+  `;
+
+  container.innerHTML = html;
+}
+
+function changePage(page) {
+  console.log("Changing to page:", page); // 👈 ADD
+  const totalPages = Math.ceil(lastTotalFaculty / rankCount);
+  if (page < 1 || page > totalPages) return;
+  rankPage = page;
   loadRankings();
 }

@@ -1211,29 +1211,76 @@ body {
 }
 
 /* ── Faculty Rankings ── */
-.rank-card { border-bottom: 1px solid var(--border2); padding: 10px 14px; }
-.rank-card:last-child { border-bottom: none; }
-.rank-card.rank-searched { outline: 2px solid #4f8ef7; border-radius: 8px; background: #4f8ef708; }
-.rank-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.rank-num { font-size: 15px; font-weight: 700; color: var(--muted); min-width: 36px; flex-shrink: 0; }
-.rank-of { display: block; font-size: 9px; font-weight: 400; color: var(--muted); }
-.rank-avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
-.rank-info { flex: 1; min-width: 0; }
-.rank-name { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rank-meta { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rank-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
-.rank-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
-.rank-stats { font-size: 10px; color: var(--muted); }
-.rank-sugg-btn { font-size: 11px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border2); background: transparent; color: var(--accent); cursor: pointer; white-space: nowrap; }
-.rank-sugg-btn:hover { background: var(--s3); }
-.rank-empty { padding: 20px; font-size: 12px; color: var(--muted); text-align: center; }
-.rank-pill { font-size: 12px; padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border2); background: transparent; color: var(--muted); cursor: pointer; }
-.rank-pill.active { background: var(--accent); color: #fff; border-color: transparent; }
-.rank-pill:hover:not(.active) { background: var(--s3); }
-.rank-toggle-track { width: 36px; height: 20px; border-radius: 10px; background: var(--border2); position: relative; transition: background 0.2s; flex-shrink: 0; }
-.rank-toggle-track.on { background: #4f8ef7; }
-.rank-toggle-thumb { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left 0.2s; }
-.rank-toggle-track.on .rank-toggle-thumb { left: 19px; }
-.rank-modal-sugg { padding: 10px 12px; border-radius: 8px; background: var(--s2); margin-bottom: 8px; border: 1px solid var(--border2); }
-.rank-modal-sugg-text { font-size: 12px; color: var(--text); line-height: 1.6; font-style: italic; }
-.rank-modal-sugg-meta { display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap; font-size: 10px; color: var(--muted); }
+.rank-row-item { display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border2);flex-wrap:wrap; }
+.rank-row-item:last-child { border-bottom:none; }
+.rank-row-item:hover { background:var(--s2);cursor:pointer; }
+.rank-row-item.rank-searched { outline:2px solid #4f8ef7;border-radius:8px;background:#4f8ef708; }
+.rank-num-block { display:flex;flex-direction:column;align-items:center;min-width:52px;flex-shrink:0; }
+.rank-cat-num { font-size:16px;font-weight:700; }
+.rank-global-num { font-size:10px;color:var(--muted);white-space:nowrap; }
+.rank-of-total { font-size:9px;color:var(--muted); }
+.rank-av { width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0; }
+.rank-info { flex:1;min-width:0; }
+.rank-name { font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.rank-meta { font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px; }
+.rank-right { display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0; }
+.rank-badge-pill { font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap; }
+.rank-stat-line { font-size:10px;color:var(--muted); }
+.rank-view-sugg-btn { font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--accent);cursor:pointer;white-space:nowrap; }
+.rank-view-sugg-btn:hover { background:var(--s3); }
+.rank-empty { padding:24px;font-size:13px;color:var(--muted);text-align:center; }
+.rank-cat-btn { padding:6px 14px;font-size:12px;border:none;border-right:1px solid var(--border2);background:var(--s1);color:var(--muted);cursor:pointer;white-space:nowrap;font-family:inherit; }
+.rank-cat-btn:last-child { border-right:none; }
+.rank-cat-btn.active { background:var(--s3);color:var(--text);font-weight:600; }
+.rank-cat-btn:hover:not(.active) { background:var(--s2); }
+.rank-pill { font-size:12px;padding:4px 12px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer; }
+.rank-pill.active { background:var(--accent);color:#fff;border-color:transparent; }
+.rank-pill:hover:not(.active) { background:var(--s3); }
+.rank-toggle-track { width:36px;height:20px;border-radius:10px;background:var(--border2);position:relative;transition:background 0.2s;flex-shrink:0; }
+.rank-toggle-track.on { background:#4f8ef7; }
+.rank-toggle-thumb { position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left 0.2s; }
+.rank-toggle-track.on .rank-toggle-thumb { left:19px; }
+.rank-modal-sugg { padding:10px 12px;border-radius:8px;background:var(--s2);margin-bottom:8px;border:1px solid var(--border2); }
+.rank-modal-sugg-text { font-size:12px;color:var(--text);line-height:1.6;font-style:italic; }
+.rank-modal-sugg-meta { display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;font-size:10px;color:var(--muted); }
+
+#rankPagination {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.rank-page-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--s2);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rank-page-btn:hover {
+  background: var(--s3);
+}
+
+.rank-page-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.rank-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.rank-page-ellipsis {
+  padding: 6px 4px;
+  color: var(--muted);
+  font-size: 12px;
+}

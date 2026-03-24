@@ -397,16 +397,25 @@
       </div>
     </div>
 
-    <!-- RANKING DATA -->
     <div id="section-rankings" style="display:none; padding:20px;">
 
-      <!-- Filter + Search bar -->
+      <!-- Search + Category filter + Exclusive toggle -->
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;
               padding:12px 14px;background:var(--s2);border-radius:10px;border:1px solid var(--border2)">
-        <input type="text" id="rankSearchInput" placeholder="Search faculty by name…"
-          oninput="onRankSearch(this.value)" style="padding:6px 12px;border-radius:8px;border:1px solid var(--border2);
-             background:var(--s1);color:var(--text);font-size:13px;width:240px;">
-        <span style="font-size:12px;color:var(--muted)">Respects all active filters above</span>
+
+        <input type="text" id="rankSearchInput" placeholder="Search faculty by name…" oninput="onRankSearch(this.value)"
+          style="padding:6px 12px;border-radius:8px;border:1px solid var(--border2);
+                  background:var(--s1);color:var(--text);font-size:13px;width:220px;">
+
+        <!-- Category filter pills -->
+        <div style="display:flex;border-radius:8px;overflow:hidden;border:1px solid var(--border2)">
+          <button class="rank-cat-btn active" data-cat="unsat" onclick="setRankCat('unsat',this)"
+            style="color:#f75f5f">Unsatisfactory</button>
+          <button class="rank-cat-btn" data-cat="sat" onclick="setRankCat('sat',this)">Satisfactory</button>
+          <button class="rank-cat-btn" data-cat="good" onclick="setRankCat('good',this)">Good</button>
+          <button class="rank-cat-btn" data-cat="vg" onclick="setRankCat('vg',this)">Very Good</button>
+          <button class="rank-cat-btn" data-cat="all" onclick="setRankCat('all',this)">All</button>
+        </div>
 
         <!-- Exclusive toggle -->
         <div style="display:flex;align-items:center;gap:8px;margin-left:auto;cursor:pointer"
@@ -414,9 +423,7 @@
           <div id="rankExcToggle" class="rank-toggle-track">
             <div class="rank-toggle-thumb"></div>
           </div>
-          <span id="rankExcLabel" style="font-size:12px;color:var(--muted);white-space:nowrap">
-            Exclusive mode: OFF
-          </span>
+          <span id="rankExcLabel" style="font-size:12px;color:var(--muted);white-space:nowrap">Exclusive: OFF</span>
         </div>
       </div>
 
@@ -424,7 +431,7 @@
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px;
               padding:12px 14px;background:var(--s2);border-radius:10px;border:1px solid var(--border2)">
         <span style="font-size:12px;color:var(--muted);white-space:nowrap">Show top</span>
-        <input type="range" id="rankCountSlider" min="5" max="50" step="5" value="10"
+        <input type="range" id="rankCountSlider" min="5" max="500" step="5" value="10"
           oninput="onRankCountSlider(this.value)" style="flex:1;max-width:200px;">
         <span id="rankCountVal" style="font-size:13px;font-weight:600;color:var(--text);min-width:80px">10
           faculty</span>
@@ -436,89 +443,38 @@
         </div>
       </div>
 
-      <!-- Four leaderboards -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+      <!-- Dynamic grid — rebuilt by buildRankGrid() -->
+      <div id="rankGrid" style="display:grid;gap:16px;"></div>
 
-        <div class="card">
-          <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2)">
-            <span
-              style="width:10px;height:10px;border-radius:50%;background:#4f8ef7;display:inline-block;flex-shrink:0"></span>
-            <span style="font-size:13px;font-weight:600;color:var(--text)">Top by Very Good %</span>
-            <span id="badge-rank-vg"
-              style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:8px;background:#4f8ef722;color:#4f8ef7;font-weight:600">Top
-              10</span>
-          </div>
-          <div id="rank-vg"></div>
-        </div>
-
-        <div class="card">
-          <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2)">
-            <span
-              style="width:10px;height:10px;border-radius:50%;background:#3dd9c4;display:inline-block;flex-shrink:0"></span>
-            <span style="font-size:13px;font-weight:600;color:var(--text)">Top by Good %</span>
-            <span id="badge-rank-good"
-              style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:8px;background:#3dd9c422;color:#3dd9c4;font-weight:600">Top
-              10</span>
-          </div>
-          <div id="rank-good"></div>
-        </div>
-
-        <div class="card">
-          <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2)">
-            <span
-              style="width:10px;height:10px;border-radius:50%;background:#f7c94f;display:inline-block;flex-shrink:0"></span>
-            <span style="font-size:13px;font-weight:600;color:var(--text)">Top by Satisfactory %</span>
-            <span id="badge-rank-sat"
-              style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:8px;background:#f7c94f22;color:#f7c94f;font-weight:600">Top
-              10</span>
-          </div>
-          <div id="rank-sat"></div>
-        </div>
-
-        <div class="card">
-          <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2)">
-            <span
-              style="width:10px;height:10px;border-radius:50%;background:#f75f5f;display:inline-block;flex-shrink:0"></span>
-            <span style="font-size:13px;font-weight:600;color:var(--text)">Top by Unsatisfactory %</span>
-            <span id="badge-rank-unsat"
-              style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:8px;background:#f75f5f22;color:#f75f5f;font-weight:600">Top
-              10</span>
-          </div>
-          <div id="rank-unsat"></div>
-        </div>
-
-      </div>
+      <div id="rankPagination" style="display:flex;gap:6px;justify-content:center;margin-top:16px;"></div>
     </div>
 
-    <!-- Rankings Modal -->
+    <!-- Rankings Suggestions Modal -->
     <div id="rankModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);
             z-index:1000;align-items:center;justify-content:center;padding:20px;"
       onclick="if(event.target===this) closeRankModal()">
       <div style="background:var(--s1);border-radius:14px;border:1px solid var(--border2);
               width:100%;max-width:520px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">
 
-        <!-- Modal header -->
         <div style="padding:16px 18px;border-bottom:1px solid var(--border2);
                 display:flex;align-items:flex-start;gap:12px;">
-          <div id="rankModalInitials" style="width:44px;height:44px;border-radius:50%;background:var(--s3);
-                  display:flex;align-items:center;justify-content:center;
-                  font-size:14px;font-weight:600;color:var(--accent);flex-shrink:0"></div>
+          <div id="rankModalInitials" style="width:44px;height:44px;border-radius:50%;display:flex;align-items:center;
+                  justify-content:center;font-size:15px;font-weight:600;flex-shrink:0"></div>
           <div style="flex:1;min-width:0">
-            <div id="rankModalName" style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px"></div>
-            <div id="rankModalCount" style="font-size:12px;color:var(--muted)"></div>
+            <div id="rankModalName" style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:3px"></div>
+            <div id="rankModalDept" style="font-size:12px;color:var(--muted);margin-bottom:6px"></div>
+            <div id="rankModalMeta" style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--muted)"></div>
           </div>
           <button onclick="closeRankModal()" style="background:transparent;border:none;font-size:20px;color:var(--muted);
                      cursor:pointer;line-height:1;padding:2px 6px;border-radius:6px">✕</button>
         </div>
 
-        <!-- Modal body -->
         <div style="padding:14px 18px;overflow-y:auto;flex:1;">
+          <div id="rankModalCount" style="font-size:12px;font-weight:500;color:var(--muted);margin-bottom:12px"></div>
           <div id="rankModalSuggList"></div>
-          <button id="rankModalLoadMore" onclick="fetchModalSugg(false)" style="display:none;margin-top:10px;width:100%;padding:8px;
-                     background:transparent;border:1px solid var(--border2);
-                     border-radius:8px;color:var(--accent);font-size:12px;cursor:pointer;">
-            Load more
-          </button>
+          <button id="rankModalLoadMore" onclick="fetchModalSugg(false)" style="display:none;margin-top:10px;width:100%;padding:8px;background:transparent;
+                     border:1px solid var(--border2);border-radius:8px;color:var(--accent);
+                     font-size:12px;cursor:pointer;">Load more</button>
         </div>
       </div>
     </div>
