@@ -578,114 +578,105 @@ def get_institutional_distribution(**kwargs):
 def get_faculty_rankings(
     role="admin", dept=None, school=None, year=None,
     programme=None, batch=None, limit=10, offset=0,
-    search=None, exclusive=False
+    search=None, exclusive=False,
+    rank_type="unsatisfactory"   # 🔥 NEW
 ):
     where, params = build_where(
         role=role, dept=dept, school=school,
         year=year, programme=programme, batch=batch
     )
 
-    query = f"""
-        SELECT
-            faculty_name, faculty_dept, faculty_school,
-            COUNT(*) FILTER (WHERE selected_option IN ('Very Good','Good','Satisfactory','Unsatisfactory')) AS total,
-            COUNT(*) FILTER (WHERE selected_option = 'Very Good')      AS very_good,
-            COUNT(*) FILTER (WHERE selected_option = 'Good')           AS good,
-            COUNT(*) FILTER (WHERE selected_option = 'Satisfactory')   AS satisfactory,
-            COUNT(*) FILTER (WHERE selected_option = 'Unsatisfactory') AS unsatisfactory,
-            ROUND(AVG(score) FILTER (
-                WHERE selected_option IN ('Very Good','Good','Satisfactory','Unsatisfactory')
-            ), 2) AS avg_score
-        FROM feedback
+    # 🔥 COUNT QUERY
+    count_query = f"""
+        SELECT COUNT(DISTINCT f.faculty_name)
+        FROM feedback f
         {where}
-        AND is_suggestion = FALSE
-        AND selected_option IN ('Very Good','Good','Satisfactory','Unsatisfactory')
-        AND faculty_name IS NOT NULL AND faculty_name != ''
-        GROUP BY faculty_name, faculty_dept, faculty_school
-        HAVING COUNT(*) > 0
+        AND f.faculty_name IS NOT NULL AND f.faculty_name != ''
     """
 
     with cursor() as cur:
-        cur.execute(query, params)
+        cur.execute(count_query, params)
+        total_count = cur.fetchone()['count']
+
+    # 🔥 SORT COLUMN MAP
+    sort_map = {
+        "very_good": "very_good_pct",
+        "good": "good_pct",
+        "satisfactory": "satisfactory_pct",
+        "unsatisfactory": "unsatisfactory_pct"
+    }
+
+    sort_col = sort_map.get(rank_type, "unsatisfactory_pct")
+
+    # 🔥 MAIN QUERY (ALL % CALCULATED IN SQL)
+    query = f"""
+        SELECT
+            f.faculty_name, 
+            f.faculty_dept, 
+            f.faculty_school,
+            fm.faculty_code,
+
+            COUNT(*) AS total,
+
+            SUM(CASE WHEN selected_option = 'Very Good' THEN 1 ELSE 0 END) AS very_good,
+            SUM(CASE WHEN selected_option = 'Good' THEN 1 ELSE 0 END) AS good,
+            SUM(CASE WHEN selected_option = 'Satisfactory' THEN 1 ELSE 0 END) AS satisfactory,
+            SUM(CASE WHEN selected_option = 'Unsatisfactory' THEN 1 ELSE 0 END) AS unsatisfactory,
+
+            ROUND(AVG(score), 2) AS avg_score,
+
+            -- 🔥 ALL PERCENTAGES IN SQL
+            (SUM(CASE WHEN selected_option = 'Very Good' THEN 1 ELSE 0 END)::float / COUNT(*)) * 100 AS very_good_pct,
+            (SUM(CASE WHEN selected_option = 'Good' THEN 1 ELSE 0 END)::float / COUNT(*)) * 100 AS good_pct,
+            (SUM(CASE WHEN selected_option = 'Satisfactory' THEN 1 ELSE 0 END)::float / COUNT(*)) * 100 AS satisfactory_pct,
+            (SUM(CASE WHEN selected_option = 'Unsatisfactory' THEN 1 ELSE 0 END)::float / COUNT(*)) * 100 AS unsatisfactory_pct
+
+        FROM feedback f
+        LEFT JOIN faculty_master fm 
+          ON f.faculty_email = fm.faculty_email
+
+        {where}
+        AND is_suggestion = FALSE
+        AND selected_option IN ('Very Good','Good','Satisfactory','Unsatisfactory')
+        AND f.faculty_name IS NOT NULL AND f.faculty_name != ''
+
+        GROUP BY f.faculty_name, f.faculty_dept, f.faculty_school, fm.faculty_code
+
+        ORDER BY {sort_col} DESC   -- 🔥 dynamic sorting
+
+        LIMIT %s OFFSET %s
+    """
+
+    final_params = params + [limit, offset]
+
+    with cursor() as cur:
+        cur.execute(query, final_params)
         rows = [dict(r) for r in cur.fetchall()]
 
-    # ── Calculate percentages ──────────────────────────────────
-    for r in rows:
-        t = r['total'] or 1
-        r['very_good_pct']      = round(r['very_good']      / t * 100, 1)
-        r['good_pct']           = round(r['good']           / t * 100, 1)
-        r['satisfactory_pct']   = round(r['satisfactory']   / t * 100, 1)
-        r['unsatisfactory_pct'] = round(r['unsatisfactory'] / t * 100, 1)
+    # 🔥 ADD RANK (GLOBAL POSITION)
+    for i, r in enumerate(rows):
+        r['rank'] = offset + i + 1
+        r['total_faculty'] = total_count
 
-    # ── Sort (global ranking) ──────────────────────────────────
-    vg_sorted    = sorted(rows, key=lambda x: x['very_good_pct'],      reverse=True)
-    good_sorted  = sorted(rows, key=lambda x: x['good_pct'],           reverse=True)
-    sat_sorted   = sorted(rows, key=lambda x: x['satisfactory_pct'],   reverse=True)
-    unsat_sorted = sorted(rows, key=lambda x: x['unsatisfactory_pct'], reverse=True)
+        # Round for UI
+        r['very_good_pct']      = round(r['very_good_pct'], 1)
+        r['good_pct']           = round(r['good_pct'], 1)
+        r['satisfactory_pct']   = round(r['satisfactory_pct'], 1)
+        r['unsatisfactory_pct'] = round(r['unsatisfactory_pct'], 1)
 
-    total_count = len(rows)
-
-    # ── Attach global rank ─────────────────────────────────────
-    def attach_rank(lst):
-        result = []
-        for i, r in enumerate(lst):
-            r_copy = dict(r)           # ← copy so other lists aren't overwritten
-            r_copy['rank'] = i + 1
-            r_copy['total_faculty'] = total_count
-            result.append(r_copy)
-        return result
-
-    vg_sorted    = attach_rank(vg_sorted)
-    good_sorted  = attach_rank(good_sorted)
-    sat_sorted   = attach_rank(sat_sorted)
-    unsat_sorted = attach_rank(unsat_sorted)
-
-    # ── Exclusive filtering (after ranking) ────────────────────
-    if exclusive:
-        assigned = set()
-
-        def excl_filter(lst):
-            out = []
-            for r in lst:
-                if r['faculty_name'] not in assigned:
-                    assigned.add(r['faculty_name'])
-                    out.append(r)
-            return out
-
-        vg_sorted    = excl_filter(vg_sorted)
-        good_sorted  = excl_filter(good_sorted)
-        sat_sorted   = excl_filter(sat_sorted)
-        unsat_sorted = excl_filter(unsat_sorted)
-
-    # ── Search (AFTER ranking — IMPORTANT FIX) ─────────────────
-    def apply_search(lst):
-        if not search:
-            return lst
+    # 🔥 Search (optional)
+    if search:
         s = search.lower()
-        return [
-            r for r in lst
-            if s in (r['faculty_name'] or '').lower()
-        ]
-
-    vg_sorted    = apply_search(vg_sorted)
-    good_sorted  = apply_search(good_sorted)
-    sat_sorted   = apply_search(sat_sorted)
-    unsat_sorted = apply_search(unsat_sorted)
-
-    # ── Pagination ─────────────────────────────────────────────
-    def paginate(lst):
-        return lst[offset: offset + limit]
+        rows = [r for r in rows if s in (r['faculty_name'] or '').lower()]
 
     return {
         "total_faculty": total_count,
-        "filtered_count": len(unsat_sorted),  # optional (useful for UI)
-        "very_good":      paginate(vg_sorted),
-        "good":           paginate(good_sorted),
-        "satisfactory":   paginate(sat_sorted),
-        "unsatisfactory": paginate(unsat_sorted),
+        "filtered_count": len(rows),
+        "very_good": rows,
+        "good": rows,
+        "satisfactory": rows,
+        "unsatisfactory": rows,
     }
-
-
 
 def get_ranking_suggestions(faculty_name, role="admin", dept=None, school=None,
                              year=None, programme=None, batch=None, limit=5, offset=0):
@@ -709,3 +700,19 @@ def get_ranking_suggestions(faculty_name, role="admin", dept=None, school=None,
         items = [dict(r) for r in cur.fetchall()]
 
     return {"total": total, "items": items}
+
+
+def get_faculty_codes(faculty_names: list) -> dict:
+    if not faculty_names:
+        return {}
+    with cursor() as cur:
+        cur.execute("""
+            SELECT DISTINCT ON (f.faculty_name)
+                f.faculty_name, fm.faculty_code
+            FROM feedback f
+            JOIN faculty_master fm 
+              ON fm.faculty_email = f.faculty_email
+            WHERE f.faculty_name = ANY(%s)
+              AND fm.faculty_code IS NOT NULL
+        """, [faculty_names])
+        return {r['faculty_name']: r['faculty_code'] for r in cur.fetchall()}

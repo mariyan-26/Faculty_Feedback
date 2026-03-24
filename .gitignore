@@ -16,3 +16,6 @@ ngrok.log
 
 # OS
 .DS_Store
+
+# Faculty photos
+frontend/assets/faculty_photos/

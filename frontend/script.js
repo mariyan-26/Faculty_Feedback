@@ -2,6 +2,13 @@
 //const API = 'https://kskwhahrj3xan44mglllrcal3i0caklx.lambda-url.ap-south-1.on.aws/api';
 const API = 'http://localhost:8000/api';
 
+const isLocal = window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1';
+
+const photoBase = isLocal
+  ? 'http://127.0.0.1:5500/assets/faculty_photos/'
+  : 'https://faculty-feedback-797259924730-ap-south-1-an.s3.ap-south-1.amazonaws.com/assets/faculty_photos/';
+
 // ── STATE ─────────────────────────────────────────────────────
 let SESSION = null;
 let FILTERS = {};          // available options from backend
@@ -511,8 +518,20 @@ async function loadFacultyCard() {
     if (!data.length) return;
 
     const f = data[0];
+    const container = document.getElementById('facAv');
     const initials = (f.faculty_name || '').split(' ').map(w => w[0]).join('').substring(0, 2);
-    document.getElementById('facAv').textContent = initials || '✦';
+
+    if (f.faculty_code) {
+      container.innerHTML = `
+    <img 
+      src="${photoBase}${encodeURIComponent(f.faculty_code)}.JPG"
+      style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
+      onerror="this.style.display='none'; this.parentElement.textContent='${initials}'"
+    />
+  `;
+    } else {
+      container.textContent = initials || '✦';
+    }
     document.getElementById('facName').textContent = f.faculty_name || '—';
     document.getElementById('facDept').textContent = `${f.faculty_dept || ''} · ${f.faculty_school || ''}`;
     const subjs = f.subjects || [];
@@ -1215,6 +1234,7 @@ async function renderInstitutionalChart(data) {
 
 async function loadRankings() {
   const f = getF();
+  buildRankGrid();
 
   const catsToLoad = rankCat === 'all'
     ? ['vg', 'good', 'sat', 'unsat']
@@ -1361,7 +1381,10 @@ function buildRankGrid() {
           Top ${rankCount}
         </span>
       </div>
-      <div class="rank-list"></div>`;
+      <div class="rank-list">
+      <div class="rank-skeleton"></div>
+      <div class="rank-skeleton"></div>
+      </div>`;
     grid.appendChild(card);
   });
 }
@@ -1371,34 +1394,127 @@ let _modalFaculty = '';
 let _modalOffset = 0;
 let _modalTotal = 0;
 
-function openRankModal(encodedFaculty, color, encodedDept, encodedSchool, avg, total, globalRank, pct, label, totalFaculty, facultyCode) {
+function openRankModal(
+  encodedFaculty,
+  color,
+  encodedDept,
+  encodedSchool,
+  avg,
+  total,
+  globalRank,
+  pct,
+  label,
+  totalFaculty,
+  facultyCode
+) {
   _modalFaculty = encodedFaculty;
   _modalOffset = 0;
   _modalTotal = 0;
 
   const faculty = decodeURIComponent(encodedFaculty);
-  const dept    = decodeURIComponent(encodedDept);
-  const school  = decodeURIComponent(encodedSchool);
-  const initials = faculty.split(' ')
-    .filter(w => /^[A-Z]/.test(w)).map(w => w[0]).join('').slice(0, 2);
+  const dept = decodeURIComponent(encodedDept);
+  const school = decodeURIComponent(encodedSchool);
 
-  document.getElementById('rankModalInitials').textContent = initials;
-  document.getElementById('rankModalInitials').style.background = color + '22';
-  document.getElementById('rankModalInitials').style.color = color;
+  const container = document.getElementById('rankModalInitials');
+
+  const initials = faculty
+    .split(' ')
+    .filter(w => /^[A-Z]/.test(w))
+    .map(w => w[0])
+    .join('')
+    .slice(0, 2);
+
+  // 🔥 Reset container
+  container.innerHTML = '';
+  container.onclick = null;
+  container.style.cursor = 'default';
+
+  const decodedCode = decodeURIComponent(facultyCode || '');
+
+  if (decodedCode) {
+    // 🔹 Loader
+    const loader = document.createElement('div');
+    loader.className = 'img-loader';
+    container.appendChild(loader);
+
+    // 🔹 Image
+    const img = document.createElement('img');
+    img.src = `${photoBase}${decodedCode}.JPG`;
+    img.alt = faculty;
+    img.className = 'modal-photo';
+    img.style.display = 'none';
+
+    // 🔹 Timeout (3 sec fallback)
+    const timeout = setTimeout(() => {
+      img.onerror();
+    }, 3000);
+
+    // ✅ On Load
+    img.onload = () => {
+      clearTimeout(timeout);
+      loader.remove();
+      img.style.display = 'block';
+    };
+
+    // ❌ On Error → fallback + retry
+    img.onerror = () => {
+      clearTimeout(timeout);
+      loader.remove();
+
+      container.innerHTML = `<span class="initials">${initials}</span>`;
+
+      // 🔁 Retry on click
+      container.style.cursor = 'pointer';
+      container.onclick = () => {
+        container.onclick = null;
+        openRankModal(
+          encodedFaculty,
+          color,
+          encodedDept,
+          encodedSchool,
+          avg,
+          total,
+          globalRank,
+          pct,
+          label,
+          totalFaculty,
+          facultyCode
+        );
+      };
+    };
+
+    container.appendChild(img);
+
+  } else {
+    container.innerHTML = `<span class="initials">${initials}</span>`;
+  }
+
+  // 🎨 Styling
+  container.style.background = color + '22';
+  container.style.color = color;
+
+  // ── TEXT INFO ─────────────────────────────────
   document.getElementById('rankModalName').textContent = faculty;
   document.getElementById('rankModalDept').textContent = `${dept} · ${school}`;
+
   document.getElementById('rankModalMeta').innerHTML = `
     <span>⭐ ${avg}/4</span>
     <span>${Number(total).toLocaleString()} total responses</span>
     <span style="background:${color}22;color:${color};padding:2px 8px;border-radius:8px;font-size:11px;font-weight:500">
       Rank ${globalRank} of ${totalFaculty} · ${pct}% ${label}
-    </span>`;
+    </span>
+  `;
+
+  // ── RESET MODAL CONTENT ───────────────────────
   document.getElementById('rankModalSuggList').innerHTML =
     '<div style="color:var(--muted);font-size:13px;padding:10px 0">Loading…</div>';
+
   document.getElementById('rankModalCount').textContent = '';
   document.getElementById('rankModalLoadMore').style.display = 'none';
+
   document.getElementById('rankModal').style.display = 'flex';
 
+  // ── FETCH SUGGESTIONS ─────────────────────────
   fetchModalSugg(true);
 }
 
