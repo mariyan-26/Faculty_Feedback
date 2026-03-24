@@ -17,10 +17,10 @@ let charts = {};
 let instSuggPage = 1;
 let instSuggTotal = 0;
 
-let rankSearch    = '';
-let rankCount     = 10;
+let rankSearch = '';
+let rankCount = 10;
 let rankExclusive = false;
-let rankCat       = 'unsat';
+let rankCat = 'unsat';
 let rankPage = 1;
 let lastTotalFaculty = 0;
 
@@ -884,7 +884,7 @@ function switchTab(type) {
   // Show/Hide sections
   document.getElementById('section-faculty').style.display = (type === 'faculty') ? 'block' : 'none';
   document.getElementById('section-institution').style.display = (type === 'institution') ? 'block' : 'none';
-  document.getElementById('section-rankings').style.display    = (type === 'rankings')    ? 'block' : 'none';
+  document.getElementById('section-rankings').style.display = (type === 'rankings') ? 'block' : 'none';
 
 
   // Toggle Button UI
@@ -894,7 +894,7 @@ function switchTab(type) {
 
 
   localStorage.setItem('active_tab', type);
-  
+
   if (type === 'institution') loadInstitutionalData();
   if (type === 'rankings') { buildRankGrid(); loadRankings(); }
 }
@@ -981,7 +981,7 @@ async function loadInstSuggestions(reset = false) {
   const uSchool = SESSION?.school || '';
 
   const params = new URLSearchParams({
-    role, school: schoolVal || uSchool,  
+    role, school: schoolVal || uSchool,
     dept: deptVal, batch: batchVal,
     limit: 5,
     offset: (instSuggPage - 1) * 5
@@ -1229,21 +1229,21 @@ async function loadRankings() {
 
   for (const [index, cat] of catsToLoad.entries()) {
     const p = new URLSearchParams({
-      role:      f.role,
-      limit:     rankCount,
-      offset:    (rankPage - 1) * rankCount,
+      role: f.role,
+      limit: rankCount,
+      offset: (rankPage - 1) * rankCount,
       exclusive: rankExclusive,
     });
 
-    if (f.dept)      p.set('dept',      f.dept);
-    if (f.school)    p.set('school',    f.school);
-    if (f.year)      p.set('year',      f.year);
+    if (f.dept) p.set('dept', f.dept);
+    if (f.school) p.set('school', f.school);
+    if (f.year) p.set('year', f.year);
     if (f.programme) p.set('programme', f.programme);
-    if (f.batch)     p.set('batch',     f.batch);
-    if (rankSearch)  p.set('search',    rankSearch);
+    if (f.batch) p.set('batch', f.batch);
+    if (rankSearch) p.set('search', rankSearch);
 
     try {
-      const res  = await fetch(`${API}/faculty-rankings?${p}`);
+      const res = await fetch(`${API}/faculty-rankings?${p}`);
       const data = await res.json();
 
       if (index === 0) {
@@ -1253,15 +1253,15 @@ async function loadRankings() {
       }
 
       const catMap = {
-        vg:    { rows: data.very_good,      pctKey: 'very_good_pct',      color: '#4f8ef7', label: 'Very Good' },
-        good:  { rows: data.good,           pctKey: 'good_pct',           color: '#3dd9c4', label: 'Good' },
-        sat:   { rows: data.satisfactory,   pctKey: 'satisfactory_pct',   color: '#f7c94f', label: 'Satisfactory' },
+        vg: { rows: data.very_good, pctKey: 'very_good_pct', color: '#4f8ef7', label: 'Very Good' },
+        good: { rows: data.good, pctKey: 'good_pct', color: '#3dd9c4', label: 'Good' },
+        sat: { rows: data.satisfactory, pctKey: 'satisfactory_pct', color: '#f7c94f', label: 'Satisfactory' },
         unsat: { rows: data.unsatisfactory, pctKey: 'unsatisfactory_pct', color: '#f75f5f', label: 'Unsatisfactory' },
       };
 
       renderRankCard(cat, catMap[cat], totalFaculty);
 
-    } catch(e) {
+    } catch (e) {
       console.warn('rankings error', e);
     }
   }
@@ -1282,34 +1282,57 @@ function renderRankCard(catKey, catData, totalFaculty) {
   }
 
   listEl.innerHTML = rows.map((r, i) => {
-    const initials  = (r.faculty_name || '')
+    const initials = (r.faculty_name || '')
       .split(' ').filter(w => /^[A-Z]/.test(w)).map(w => w[0]).join('').slice(0, 2);
     const isSearched = rankSearch &&
       r.faculty_name.toLowerCase().includes(rankSearch.toLowerCase());
 
+    const countKey = {
+      'Very Good': 'very_good',
+      'Good': 'good',
+      'Satisfactory': 'satisfactory',
+      'Unsatisfactory': 'unsatisfactory'
+    }[label] || 'very_good';
+
     return `
-      <div class="rank-row-item ${isSearched ? 'rank-searched' : ''}">
-        <div class="rank-num-block">
-          <span class="rank-cat-num" style="color:${color}">#${(rankPage - 1) * rankCount + i + 1}</span>
-          <span class="rank-global-num">${r.rank} of ${totalFaculty}</span>
-          ${isSearched ? `<span class="rank-of-total">of ${totalFaculty}</span>` : ''}
-        </div>
-        <div class="rank-av" style="background:${color}22;color:${color}">${initials}</div>
-        <div class="rank-info">
-          <div class="rank-name">${esc(r.faculty_name)}</div>
-          <div class="rank-meta">${esc(r.faculty_dept || '')} · ${esc(r.faculty_school || '')}</div>
-        </div>
-        <div class="rank-right">
-          <span class="rank-badge-pill" style="background:${color}22;color:${color}">
-            ${r[pctKey]}% · ${Number(r[label.toLowerCase().replace(' ', '_')] || r['very_good'] || 0).toLocaleString()} ${label}
-          </span>
-          <span class="rank-stat-line">⭐ ${r.avg_score}/4 · ${Number(r.total).toLocaleString()} total</span>
-          <button class="rank-view-sugg-btn"
-            onclick="openRankModal('${encodeURIComponent(r.faculty_name)}', '${color}', '${esc(r.faculty_dept || '')}', '${esc(r.faculty_school || '')}', ${r.avg_score}, ${r.total}, ${r.rank}, ${r[pctKey]}, '${label}', ${totalFaculty})"
-            View suggestions
-          </button>
-        </div>
-      </div>`;
+  <div class="rank-row-item ${isSearched ? 'rank-searched' : ''}">
+    <div class="rank-num-block">
+      <span class="rank-cat-num" style="color:${color}">#${i + 1}</span>
+      <span class="rank-global-num">${r.rank} of ${totalFaculty}</span>
+      ${isSearched ? `<span class="rank-of-total">of ${totalFaculty}</span>` : ''}
+    </div>
+    <div class="rank-av-wrap">
+      <img
+        src="${photoBase}${encodeURIComponent(r.faculty_code || '')}.JPG"
+        class="rank-photo"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+        style="${r.faculty_code ? '' : 'display:none'}"
+      />
+      <div class="rank-av" style="background:${color}22;color:${color};${r.faculty_code ? 'display:none' : ''}">${initials}</div>
+    </div>
+    <div class="rank-info">
+      <div class="rank-name">${esc(r.faculty_name)}</div>
+      <div class="rank-meta">${esc(r.faculty_dept || '')} · ${esc(r.faculty_school || '')}</div>
+    </div>
+    <div class="rank-right">
+      <span class="rank-badge-pill" style="background:${color}22;color:${color}">
+        ${r[pctKey]}% · ${Number(r[countKey] || 0).toLocaleString()} ${label}
+      </span>
+      <span class="rank-stat-line">⭐ ${r.avg_score}/4 · ${Number(r.total).toLocaleString()} total</span>
+      <button class="rank-view-sugg-btn"
+  onclick="openRankModal(
+    '${encodeURIComponent(r.faculty_name)}',
+    '${color}',
+    '${encodeURIComponent(r.faculty_dept || '')}',
+    '${encodeURIComponent(r.faculty_school || '')}',
+    ${r.avg_score}, ${r.total}, ${r.rank}, ${r[pctKey]},
+    '${label}', ${totalFaculty},
+    '${r.faculty_code || ''}'
+  )">
+  View suggestions
+</button>
+    </div>
+  </div>`;
   }).join('');
 }
 
@@ -1319,9 +1342,9 @@ function buildRankGrid() {
 
   const catDefs = [
     { key: 'unsat', color: '#f75f5f', title: 'Top by Unsatisfactory %' },
-    { key: 'sat',   color: '#f7c94f', title: 'Top by Satisfactory %'   },
-    { key: 'good',  color: '#3dd9c4', title: 'Top by Good %'           },
-    { key: 'vg',    color: '#4f8ef7', title: 'Top by Very Good %'      },
+    { key: 'sat', color: '#f7c94f', title: 'Top by Satisfactory %' },
+    { key: 'good', color: '#3dd9c4', title: 'Top by Good %' },
+    { key: 'vg', color: '#4f8ef7', title: 'Top by Very Good %' },
   ];
 
   const toShow = rankCat === 'all' ? catDefs : [catDefs.find(c => c.key === rankCat)];
@@ -1345,34 +1368,36 @@ function buildRankGrid() {
 
 // ── MODAL ─────────────────────────────────────────────────────
 let _modalFaculty = '';
-let _modalOffset  = 0;
-let _modalTotal   = 0;
+let _modalOffset = 0;
+let _modalTotal = 0;
 
-function openRankModal(encodedFaculty, color, dept, school, avg, total, globalRank, pct, label, totalFaculty) {
+function openRankModal(encodedFaculty, color, encodedDept, encodedSchool, avg, total, globalRank, pct, label, totalFaculty, facultyCode) {
   _modalFaculty = encodedFaculty;
-  _modalOffset  = 0;
-  _modalTotal   = 0;
+  _modalOffset = 0;
+  _modalTotal = 0;
 
-  const faculty  = decodeURIComponent(encodedFaculty);
+  const faculty = decodeURIComponent(encodedFaculty);
+  const dept    = decodeURIComponent(encodedDept);
+  const school  = decodeURIComponent(encodedSchool);
   const initials = faculty.split(' ')
     .filter(w => /^[A-Z]/.test(w)).map(w => w[0]).join('').slice(0, 2);
 
-  document.getElementById('rankModalInitials').textContent    = initials;
+  document.getElementById('rankModalInitials').textContent = initials;
   document.getElementById('rankModalInitials').style.background = color + '22';
-  document.getElementById('rankModalInitials').style.color      = color;
-  document.getElementById('rankModalName').textContent         = faculty;
-  document.getElementById('rankModalDept').textContent         = `${dept} · ${school}`;
-  document.getElementById('rankModalMeta').innerHTML           = `
+  document.getElementById('rankModalInitials').style.color = color;
+  document.getElementById('rankModalName').textContent = faculty;
+  document.getElementById('rankModalDept').textContent = `${dept} · ${school}`;
+  document.getElementById('rankModalMeta').innerHTML = `
     <span>⭐ ${avg}/4</span>
     <span>${Number(total).toLocaleString()} total responses</span>
     <span style="background:${color}22;color:${color};padding:2px 8px;border-radius:8px;font-size:11px;font-weight:500">
       Rank ${globalRank} of ${totalFaculty} · ${pct}% ${label}
     </span>`;
-  document.getElementById('rankModalSuggList').innerHTML       =
+  document.getElementById('rankModalSuggList').innerHTML =
     '<div style="color:var(--muted);font-size:13px;padding:10px 0">Loading…</div>';
-  document.getElementById('rankModalCount').textContent        = '';
-  document.getElementById('rankModalLoadMore').style.display   = 'none';
-  document.getElementById('rankModal').style.display           = 'flex';
+  document.getElementById('rankModalCount').textContent = '';
+  document.getElementById('rankModalLoadMore').style.display = 'none';
+  document.getElementById('rankModal').style.display = 'flex';
 
   fetchModalSugg(true);
 }
@@ -1381,19 +1406,19 @@ async function fetchModalSugg(initial) {
   const f = getF();
   const p = new URLSearchParams({
     faculty: decodeURIComponent(_modalFaculty),
-    role:    f.role,
-    limit:   5,
-    offset:  _modalOffset,
+    role: f.role,
+    limit: 5,
+    offset: _modalOffset,
   });
-  if (f.dept)      p.set('dept',      f.dept);
-  if (f.school)    p.set('school',    f.school);
-  if (f.year)      p.set('year',      f.year);
+  if (f.dept) p.set('dept', f.dept);
+  if (f.school) p.set('school', f.school);
+  if (f.year) p.set('year', f.year);
   if (f.programme) p.set('programme', f.programme);
-  if (f.batch)     p.set('batch',     f.batch);
+  if (f.batch) p.set('batch', f.batch);
 
   try {
-    const res   = await fetch(`${API}/ranking-suggestions?${p}`);
-    const data  = await res.json();
+    const res = await fetch(`${API}/ranking-suggestions?${p}`);
+    const data = await res.json();
     _modalTotal = data.total || 0;
     const items = data.items || [];
 
@@ -1415,7 +1440,7 @@ async function fetchModalSugg(initial) {
       div.innerHTML = `
         <div class="rank-modal-sugg-text">"${esc(s.answer_text)}"</div>
         <div class="rank-modal-sugg-meta">
-          ${s.subject   ? `<span>📖 ${esc(s.subject)}</span>`        : ''}
+          ${s.subject ? `<span>📖 ${esc(s.subject)}</span>` : ''}
           ${s.student_batch ? `<span>📚 ${esc(s.student_batch)}</span>` : ''}
         </div>`;
       list.appendChild(div);
@@ -1425,9 +1450,9 @@ async function fetchModalSugg(initial) {
     const remaining = _modalTotal - _modalOffset;
     const btn = document.getElementById('rankModalLoadMore');
     btn.style.display = remaining > 0 ? 'block' : 'none';
-    btn.textContent   = `Load more (${remaining} remaining)`;
+    btn.textContent = `Load more (${remaining} remaining)`;
 
-  } catch(e) {
+  } catch (e) {
     document.getElementById('rankModalSuggList').innerHTML =
       '<div style="color:var(--muted);font-size:13px">Failed to load suggestions.</div>';
   }
