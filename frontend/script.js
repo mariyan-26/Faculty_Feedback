@@ -469,20 +469,31 @@ function buildQS(extras = {}) {
 }
 
 function buildRankQS() {
-  const p = new URLSearchParams();
+  const f = getF(); // your filters
 
-  p.set('search', rankSearch || '');
-  p.set('category', rankCat || '');
-  p.set('exclusive', rankExclusive ? '1' : '0');
-  p.set('limit', rankCount);
-  p.set('offset', (rankPage - 1) * rankCount);
+  const sortMap = {
+    vg: 'very_good',
+    good: 'good',
+    sat: 'satisfactory',
+    unsat: 'unsatisfactory'
+  };
 
-  // keep role-based restriction (IMPORTANT)
-  p.set('role', SESSION?.role || 'admin');
-  if (SESSION?.dept) p.set('dept', SESSION.dept);
-  if (SESSION?.school) p.set('school', SESSION.school);
+  const params = new URLSearchParams({
+    role: f.role || 'admin',
+    limit: rankCount,
+    offset: (rankPage - 1) * rankCount,
+    sort_by: sortMap[rankCat] || 'unsatisfactory'   // ✅ FIX
+  });
 
-  return p.toString();
+  if (rankSearch) params.set('search', rankSearch);
+  if (rankExclusive) params.set('exclusive', 'true');
+  if (f.dept) params.set('dept', f.dept);
+  if (f.school) params.set('school', f.school);
+  if (f.year) params.set('year', f.year);
+  if (f.programme) params.set('programme', f.programme);
+  if (f.batch) params.set('batch', f.batch);
+
+  return params.toString();
 }
 
 function setLoading(cardId, show) {
@@ -1302,19 +1313,37 @@ function renderRankCard(catKey, catData, totalFaculty) {
   const container = document.getElementById(`rank-card-${catKey}`);
   if (!container) return;
 
-  const { rows, pctKey, color, label, title } = catData;
+  // ✅ FIX 1 — ensure rows come from API correctly
+  const rows = catData.rows || [];
+  const { pctKey, color, label, title } = catData;
+
   const badge = container.querySelector('.rank-count-badge');
   if (badge) badge.textContent = rankCount >= 50 ? 'All' : `Top ${rankCount}`;
 
   const listEl = container.querySelector('.rank-list');
-  if (!rows || !rows.length) {
+
+  if (!rows.length) {
     listEl.innerHTML = '<div class="rank-empty">No data for current filters</div>';
     return;
   }
 
-  listEl.innerHTML = rows.map((r, i) => {
+  listEl.innerHTML = rows.map((r) => {
+
+    // ✅ FIX 2 — dynamic rank key
+    const rankKey = {
+      'Very Good': 'vg_rank',
+      'Good': 'good_rank',
+      'Satisfactory': 'sat_rank',
+      'Unsatisfactory': 'unsat_rank'
+    }[label];
+
     const initials = (r.faculty_name || '')
-      .split(' ').filter(w => /^[A-Z]/.test(w)).map(w => w[0]).join('').slice(0, 2);
+      .split(' ')
+      .filter(w => /^[A-Z]/.test(w))
+      .map(w => w[0])
+      .join('')
+      .slice(0, 2);
+
     const isSearched = rankSearch &&
       r.faculty_name.toLowerCase().includes(rankSearch.toLowerCase());
 
@@ -1326,53 +1355,64 @@ function renderRankCard(catKey, catData, totalFaculty) {
     }[label] || 'very_good';
 
     return `
-  <div class="rank-row-item ${isSearched ? 'rank-searched' : ''}">
-    <div class="rank-num-block">
-      <span class="rank-cat-num" style="color:${color}">#${r.rank}</span>
-      <span class="rank-global-num">${r.rank} of ${totalFaculty}</span>
-      ${isSearched ? `<span class="rank-of-total">of ${totalFaculty}</span>` : ''}
-    </div>
-    <div class="rank-av-wrap">
-      <img
-  src="${photoBase}${encodeURIComponent(r.faculty_code || r.faculty_name)}.jpg"
-  class="rank-photo"
-  style="${r.faculty_code ? '' : 'display:none'}; cursor:pointer"
-  onclick="openImgModal(this.src)"
-  onerror="
-    if (!this.dataset.retry) {
-      this.dataset.retry = '1';
-      this.src='${photoBase}${encodeURIComponent(r.faculty_code || r.faculty_name)}.JPG';
-    } else {
-      this.style.display='none';
-      this.nextElementSibling.style.display='flex';
-    }
-  "
-/>
-      <div class="rank-av" style="background:${color}22;color:${color};${r.faculty_code ? 'display:none' : ''}">${initials}</div>
-    </div>
-    <div class="rank-info">
-      <div class="rank-name">${esc(r.faculty_name)}</div>
-      <div class="rank-meta">${esc(r.faculty_dept || '')} · ${esc(r.faculty_school || '')}</div>
-    </div>
-    <div class="rank-right">
-      <span class="rank-badge-pill" style="background:${color}22;color:${color}">
-        ${r[pctKey]}% · ${Number(r[countKey] || 0).toLocaleString()} ${label}
-      </span>
-      <span class="rank-stat-line">⭐ ${r.avg_score}/4 · ${Number(r.total).toLocaleString()} total</span>
-      <button class="rank-view-sugg-btn"
-  onclick="openRankModal(
-    '${encodeURIComponent(r.faculty_name)}',
-    '${color}',
-    '${encodeURIComponent(r.faculty_dept || '')}',
-    '${encodeURIComponent(r.faculty_school || '')}',
-    ${r.avg_score}, ${r.total}, ${r.rank}, ${r[pctKey]},
-    '${label}', ${totalFaculty},
-    '${r.faculty_code || ''}'
-  )">
-  View suggestions
-</button>
-    </div>
-  </div>`;
+    <div class="rank-row-item ${isSearched ? 'rank-searched' : ''}">
+      
+      <div class="rank-num-block">
+        <span class="rank-cat-num" style="color:${color}">#${r[rankKey]}</span>
+        <span class="rank-global-num">${r[rankKey]} of ${totalFaculty}</span>
+        ${isSearched ? `<span class="rank-of-total">of ${totalFaculty}</span>` : ''}
+      </div>
+
+      <div class="rank-av-wrap">
+        <img
+          src="${photoBase}${encodeURIComponent(r.faculty_code || r.faculty_name)}.jpg"
+          class="rank-photo"
+          style="${r.faculty_code ? '' : 'display:none'}; cursor:pointer"
+          onclick="openImgModal(this.src)"
+          onerror="
+            if (!this.dataset.retry) {
+              this.dataset.retry = '1';
+              this.src='${photoBase}${encodeURIComponent(r.faculty_code || r.faculty_name)}.JPG';
+            } else {
+              this.style.display='none';
+              this.nextElementSibling.style.display='flex';
+            }
+          "
+        />
+        <div class="rank-av" style="background:${color}22;color:${color};${r.faculty_code ? 'display:none' : ''}">
+          ${initials}
+        </div>
+      </div>
+
+      <div class="rank-info">
+        <div class="rank-name">${esc(r.faculty_name)}</div>
+        <div class="rank-meta">${esc(r.faculty_dept || '')} · ${esc(r.faculty_school || '')}</div>
+      </div>
+
+      <div class="rank-right">
+        <span class="rank-badge-pill" style="background:${color}22;color:${color}">
+          ${r[pctKey]}% · ${Number(r[countKey] || 0).toLocaleString()} ${label}
+        </span>
+
+        <span class="rank-stat-line">
+          ⭐ ${r.avg_score}/4 · ${Number(r.total).toLocaleString()} total
+        </span>
+
+        <button class="rank-view-sugg-btn"
+          onclick="openRankModal(
+            '${encodeURIComponent(r.faculty_name)}',
+            '${color}',
+            '${encodeURIComponent(r.faculty_dept || '')}',
+            '${encodeURIComponent(r.faculty_school || '')}',
+            ${r.avg_score}, ${r.total}, ${r[rankKey]}, ${r[pctKey]},
+            '${label}', ${totalFaculty},
+            '${r.faculty_code || ''}'
+          )">
+          View suggestions
+        </button>
+      </div>
+
+    </div>`;
   }).join('');
 }
 
@@ -1600,13 +1640,16 @@ function closeRankModal() {
 
 // ── RANKINGS CONTROLS ─────────────────────────────────────────
 
-function setRankCat(key, btn) {
-  rankCat = key;
-  rankPage = 1; // ✅ FIX
-  document.querySelectorAll('.rank-cat-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  buildRankGrid();
+function setRankCat(cat, el) {
+  rankCat = cat;
+  rankPage = 1; //FIX
+   document.querySelectorAll('.rank-cat-btn').forEach(btn => {
+     btn.classList.remove('active');
+  });
+  el.classList.add('active');
+  console.log("Selected category:", rankCat);
   loadRankings();
+
 }
 
 function onRankSearch(val) {
