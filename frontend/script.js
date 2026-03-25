@@ -1233,57 +1233,47 @@ async function renderInstitutionalChart(data) {
 // ── FACULTY RANKINGS ──────────────────────────────────────────
 
 async function loadRankings() {
-  const f = getF();
   buildRankGrid();
 
-  const catsToLoad = rankCat === 'all'
-    ? ['vg', 'good', 'sat', 'unsat']
-    : [rankCat];
+  const f = getF();
+  const p = new URLSearchParams({
+    role:      f.role,
+    limit:     rankCount,
+    offset:    (rankPage - 1) * rankCount,
+    exclusive: rankExclusive,
+  });
+  if (f.dept)      p.set('dept',      f.dept);
+  if (f.school)    p.set('school',    f.school);
+  if (f.year)      p.set('year',      f.year);
+  if (f.programme) p.set('programme', f.programme);
+  if (f.batch)     p.set('batch',     f.batch);
+  if (rankSearch)  p.set('search',    rankSearch);
 
-  const grid = document.getElementById('rankGrid');
-  grid.style.gridTemplateColumns = rankCat === 'all'
-    ? 'repeat(auto-fit, minmax(300px, 1fr))'
-    : '1fr';
+  try {
+    const res  = await fetch(`${API}/faculty-rankings?${p}`);
+    const data = await res.json();
 
-  let totalFaculty = 0; // ✅ store once
+    const totalFaculty   = data.total_faculty || 0;
+    lastTotalFaculty     = totalFaculty;
+    renderPagination(totalFaculty);
 
-  for (const [index, cat] of catsToLoad.entries()) {
-    const p = new URLSearchParams({
-      role: f.role,
-      limit: rankCount,
-      offset: (rankPage - 1) * rankCount,
-      exclusive: rankExclusive,
+    const catMap = {
+      vg:    { rows: data.very_good,      pctKey: 'very_good_pct',      color: '#4f8ef7', label: 'Very Good' },
+      good:  { rows: data.good,           pctKey: 'good_pct',           color: '#3dd9c4', label: 'Good' },
+      sat:   { rows: data.satisfactory,   pctKey: 'satisfactory_pct',   color: '#f7c94f', label: 'Satisfactory' },
+      unsat: { rows: data.unsatisfactory, pctKey: 'unsatisfactory_pct', color: '#f75f5f', label: 'Unsatisfactory' },
+    };
+
+    const catsToRender = rankCat === 'all'
+      ? ['vg', 'good', 'sat', 'unsat']
+      : [rankCat];
+
+    catsToRender.forEach(cat => {
+      renderRankCard(cat, catMap[cat], totalFaculty);
     });
 
-    if (f.dept) p.set('dept', f.dept);
-    if (f.school) p.set('school', f.school);
-    if (f.year) p.set('year', f.year);
-    if (f.programme) p.set('programme', f.programme);
-    if (f.batch) p.set('batch', f.batch);
-    if (rankSearch) p.set('search', rankSearch);
-
-    try {
-      const res = await fetch(`${API}/faculty-rankings?${p}`);
-      const data = await res.json();
-
-      if (index === 0) {
-        totalFaculty = data.total_faculty || 0;
-        lastTotalFaculty = totalFaculty; // ✅ store globally
-        renderPagination(totalFaculty);  // ✅ call once
-      }
-
-      const catMap = {
-        vg: { rows: data.very_good, pctKey: 'very_good_pct', color: '#4f8ef7', label: 'Very Good' },
-        good: { rows: data.good, pctKey: 'good_pct', color: '#3dd9c4', label: 'Good' },
-        sat: { rows: data.satisfactory, pctKey: 'satisfactory_pct', color: '#f7c94f', label: 'Satisfactory' },
-        unsat: { rows: data.unsatisfactory, pctKey: 'unsatisfactory_pct', color: '#f75f5f', label: 'Unsatisfactory' },
-      };
-
-      renderRankCard(cat, catMap[cat], totalFaculty);
-
-    } catch (e) {
-      console.warn('rankings error', e);
-    }
+  } catch(e) {
+    console.warn('rankings error', e);
   }
 }
 
@@ -1317,7 +1307,7 @@ function renderRankCard(catKey, catData, totalFaculty) {
     return `
   <div class="rank-row-item ${isSearched ? 'rank-searched' : ''}">
     <div class="rank-num-block">
-      <span class="rank-cat-num" style="color:${color}">#${i + 1}</span>
+      <span class="rank-cat-num" style="color:${color}">#${r.rank}</span>
       <span class="rank-global-num">${r.rank} of ${totalFaculty}</span>
       ${isSearched ? `<span class="rank-of-total">of ${totalFaculty}</span>` : ''}
     </div>

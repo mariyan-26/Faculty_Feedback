@@ -578,104 +578,109 @@ def get_institutional_distribution(**kwargs):
 def get_faculty_rankings(
     role="admin", dept=None, school=None, year=None,
     programme=None, batch=None, limit=10, offset=0,
-    search=None, exclusive=False,
-    rank_type="unsatisfactory"   # 🔥 NEW
+    search=None, exclusive=False
 ):
     where, params = build_where(
         role=role, dept=dept, school=school,
         year=year, programme=programme, batch=batch
     )
 
-    # 🔥 COUNT QUERY
-    count_query = f"""
-        SELECT COUNT(DISTINCT f.faculty_name)
-        FROM feedback f
-        {where}
-        AND f.faculty_name IS NOT NULL AND f.faculty_name != ''
-    """
-
-    with cursor() as cur:
-        cur.execute(count_query, params)
-        total_count = cur.fetchone()['count']
-
-    # 🔥 SORT COLUMN MAP
-    sort_map = {
-        "very_good": "very_good_pct",
-        "good": "good_pct",
-        "satisfactory": "satisfactory_pct",
-        "unsatisfactory": "unsatisfactory_pct"
-    }
-
-    sort_col = sort_map.get(rank_type, "unsatisfactory_pct")
-
-    # 🔥 MAIN QUERY (ALL % CALCULATED IN SQL)
-    query = f"""
-        SELECT
-            f.faculty_name, 
-            f.faculty_dept, 
-            f.faculty_school,
-            fm.faculty_code,
-
-            COUNT(*) AS total,
-
-            SUM(CASE WHEN selected_option = 'Very Good' THEN 1 ELSE 0 END) AS very_good,
-            SUM(CASE WHEN selected_option = 'Good' THEN 1 ELSE 0 END) AS good,
-            SUM(CASE WHEN selected_option = 'Satisfactory' THEN 1 ELSE 0 END) AS satisfactory,
-            SUM(CASE WHEN selected_option = 'Unsatisfactory' THEN 1 ELSE 0 END) AS unsatisfactory,
-
-            ROUND(AVG(score), 2) AS avg_score,
-
-            -- 🔥 ALL PERCENTAGES IN SQL
-            (SUM(CASE WHEN selected_option = 'Very Good' THEN 1 ELSE 0 END)::float / COUNT(*)) * 100 AS very_good_pct,
-            (SUM(CASE WHEN selected_option = 'Good' THEN 1 ELSE 0 END)::float / COUNT(*)) * 100 AS good_pct,
-            (SUM(CASE WHEN selected_option = 'Satisfactory' THEN 1 ELSE 0 END)::float / COUNT(*)) * 100 AS satisfactory_pct,
-            (SUM(CASE WHEN selected_option = 'Unsatisfactory' THEN 1 ELSE 0 END)::float / COUNT(*)) * 100 AS unsatisfactory_pct
-
-        FROM feedback f
-        LEFT JOIN faculty_master fm 
-          ON f.faculty_email = fm.faculty_email
-
-        {where}
-        AND is_suggestion = FALSE
-        AND selected_option IN ('Very Good','Good','Satisfactory','Unsatisfactory')
-        AND f.faculty_name IS NOT NULL AND f.faculty_name != ''
-
-        GROUP BY f.faculty_name, f.faculty_dept, f.faculty_school, fm.faculty_code
-
-        ORDER BY {sort_col} DESC   -- 🔥 dynamic sorting
-
-        LIMIT %s OFFSET %s
-    """
-
-    final_params = params + [limit, offset]
-
-    with cursor() as cur:
-        cur.execute(query, final_params)
-        rows = [dict(r) for r in cur.fetchall()]
-
-    # 🔥 ADD RANK (GLOBAL POSITION)
-    for i, r in enumerate(rows):
-        r['rank'] = offset + i + 1
-        r['total_faculty'] = total_count
-
-        # Round for UI
-        r['very_good_pct']      = round(r['very_good_pct'], 1)
-        r['good_pct']           = round(r['good_pct'], 1)
-        r['satisfactory_pct']   = round(r['satisfactory_pct'], 1)
-        r['unsatisfactory_pct'] = round(r['unsatisfactory_pct'], 1)
-
-    # 🔥 Search (optional)
+    search_clause = ""
+    search_params = []
     if search:
-        s = search.lower()
-        rows = [r for r in rows if s in (r['faculty_name'] or '').lower()]
+        search_clause = "AND LOWER(f.faculty_name) LIKE LOWER(%s)"
+        search_params = [f"%{search}%"]
+
+    query = f"""
+        WITH faculty_stats AS (
+            SELECT
+                f.faculty_name,
+                f.faculty_dept,
+                f.faculty_school,
+                fm.faculty_code,
+                COUNT(*) AS total,
+                SUM(CASE WHEN f.selected_option = 'Very Good'      THEN 1 ELSE 0 END) AS very_good,
+                SUM(CASE WHEN f.selected_option = 'Good'           THEN 1 ELSE 0 END) AS good,
+                SUM(CASE WHEN f.selected_option = 'Satisfactory'   THEN 1 ELSE 0 END) AS satisfactory,
+                SUM(CASE WHEN f.selected_option = 'Unsatisfactory' THEN 1 ELSE 0 END) AS unsatisfactory,
+                ROUND(AVG(f.score), 2) AS avg_score,
+                ROUND((SUM(CASE WHEN f.selected_option = 'Very Good'      THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS very_good_pct,
+                ROUND((SUM(CASE WHEN f.selected_option = 'Good'           THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS good_pct,
+                ROUND((SUM(CASE WHEN f.selected_option = 'Satisfactory'   THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS satisfactory_pct,
+                ROUND((SUM(CASE WHEN f.selected_option = 'Unsatisfactory' THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS unsatisfactory_pct
+            FROM feedback f
+            LEFT JOIN faculty_master fm ON fm.faculty_email = f.faculty_email
+            {where}
+            AND f.is_suggestion = FALSE
+            AND f.selected_option IN ('Very Good','Good','Satisfactory','Unsatisfactory')
+            AND f.faculty_name IS NOT NULL AND f.faculty_name != ''
+            {search_clause}
+            GROUP BY f.faculty_name, f.faculty_dept, f.faculty_school, fm.faculty_code
+        ),
+        ranked AS (
+            SELECT *,
+                RANK() OVER (ORDER BY very_good_pct      DESC) AS vg_rank,
+                RANK() OVER (ORDER BY good_pct           DESC) AS good_rank,
+                RANK() OVER (ORDER BY satisfactory_pct   DESC) AS sat_rank,
+                RANK() OVER (ORDER BY unsatisfactory_pct DESC) AS unsat_rank
+            FROM faculty_stats
+        )
+        SELECT *, COUNT(*) OVER () AS total_count
+        FROM ranked
+    """
+
+    all_params = params + search_params
+
+    with cursor() as cur:
+        cur.execute(query, all_params)
+        all_rows = [dict(r) for r in cur.fetchall()]
+
+    if not all_rows:
+        return {
+            "total_faculty": 0,
+            "very_good": [], "good": [],
+            "satisfactory": [], "unsatisfactory": []
+        }
+
+    total_count = all_rows[0]['total_count']
+
+    # ── Sort each category independently ──────────────────────
+    vg_sorted    = sorted(all_rows, key=lambda x: x['very_good_pct'],      reverse=True)
+    good_sorted  = sorted(all_rows, key=lambda x: x['good_pct'],           reverse=True)
+    sat_sorted   = sorted(all_rows, key=lambda x: x['satisfactory_pct'],   reverse=True)
+    unsat_sorted = sorted(all_rows, key=lambda x: x['unsatisfactory_pct'], reverse=True)
+
+    # ── Exclusive mode ─────────────────────────────────────────
+    if exclusive:
+        assigned = set()
+        def excl_filter(lst):
+            out = []
+            for r in lst:
+                if r['faculty_name'] not in assigned:
+                    assigned.add(r['faculty_name'])
+                    out.append(r)
+            return out
+        vg_sorted    = excl_filter(vg_sorted)
+        good_sorted  = excl_filter(good_sorted)
+        sat_sorted   = excl_filter(sat_sorted)
+        unsat_sorted = excl_filter(unsat_sorted)
+
+    # ── Attach true global rank + paginate ────────────────────
+    def attach_and_paginate(lst, rank_key):
+        result = []
+        for i, r in enumerate(lst):
+            row = dict(r)
+            row['rank'] = i + 1          # true global rank
+            row['total_faculty'] = total_count
+            result.append(row)
+        return result[offset: offset + limit]
 
     return {
         "total_faculty": total_count,
-        "filtered_count": len(rows),
-        "very_good": rows,
-        "good": rows,
-        "satisfactory": rows,
-        "unsatisfactory": rows,
+        "very_good":      attach_and_paginate(vg_sorted,    'vg_rank'),
+        "good":           attach_and_paginate(good_sorted,  'good_rank'),
+        "satisfactory":   attach_and_paginate(sat_sorted,   'sat_rank'),
+        "unsatisfactory": attach_and_paginate(unsat_sorted, 'unsat_rank'),
     }
 
 def get_ranking_suggestions(faculty_name, role="admin", dept=None, school=None,

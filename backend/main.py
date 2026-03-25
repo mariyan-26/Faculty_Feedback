@@ -333,7 +333,7 @@ async def faculty_rankings(
     programme: Optional[str] = Query(None),
     batch: Optional[str] = Query(None),
     limit: int = Query(10),
-    offset: int = Query(0),  # ✅ FIXED
+    offset: int = Query(0),
     search: Optional[str] = Query(None),
     exclusive: bool = Query(False),
 ):
