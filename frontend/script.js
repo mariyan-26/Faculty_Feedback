@@ -1,10 +1,25 @@
 // ── CONFIG ────────────────────────────────────────────────────
 //const API = 'https://kskwhahrj3xan44mglllrcal3i0caklx.lambda-url.ap-south-1.on.aws/api';
-const API = 'http://localhost:8000/api';
+//const API = 'http://localhost:8000/api';
 
-const isLocal = window.location.hostname === 'localhost' ||
+//const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+/*const photoBase = isLocal
+  ? 'http://127.0.0.1:5500/assets/faculty_photos/'
+  : 'https://faculty-feedback-797259924730-ap-south-1-an.s3.ap-south-1.amazonaws.com/assets/faculty_photos/';*/
+
+// ── CONFIG ────────────────────────────────────────────────────
+
+const isLocal =
+  window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1';
 
+// API auto-switch
+const API = isLocal
+  ? 'http://localhost:8000/api'
+  : 'https://kskwhahrj3xan44mglllrcal3i0caklx.lambda-url.ap-south-1.on.aws/api';
+
+// Photo base (already correct)
 const photoBase = isLocal
   ? 'http://127.0.0.1:5500/assets/faculty_photos/'
   : 'https://faculty-feedback-797259924730-ap-south-1-an.s3.ap-south-1.amazonaws.com/assets/faculty_photos/';
