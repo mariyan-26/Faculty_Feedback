@@ -460,26 +460,43 @@ def get_faculty_info(faculty=None, dept=None):
     with cursor() as cur:
         if faculty:
             cur.execute("""
-                SELECT DISTINCT faculty_name, faculty_dept, faculty_school,
-                    array_agg(DISTINCT subject) FILTER (WHERE subject IS NOT NULL AND subject != '') AS subjects,
-                    faculty_email
-                FROM feedback
-                WHERE faculty_name = %s
-                GROUP BY faculty_name, faculty_dept, faculty_school, faculty_email
+                SELECT 
+                    f.faculty_name,
+                    m.faculty_code,   
+                    f.faculty_dept,
+                    f.faculty_school,
+                    array_agg(DISTINCT f.subject) 
+                        FILTER (WHERE f.subject IS NOT NULL AND f.subject != '') AS subjects,
+                    f.faculty_email
+                FROM feedback f
+                LEFT JOIN faculty_master m 
+                    ON f.faculty_name = m.faculty_name  
+                WHERE f.faculty_name = %s
+                GROUP BY f.faculty_name, m.faculty_code, f.faculty_dept, f.faculty_school, f.faculty_email
                 LIMIT 1
             """, [faculty])
+
         elif dept:
             cur.execute("""
-                SELECT DISTINCT faculty_name, faculty_dept, faculty_school,
-                    array_agg(DISTINCT subject) FILTER (WHERE subject IS NOT NULL AND subject != '') AS subjects,
-                    faculty_email
-                FROM feedback
-                WHERE faculty_dept = %s
-                GROUP BY faculty_name, faculty_dept, faculty_school, faculty_email
-                ORDER BY faculty_name
+                SELECT 
+                    f.faculty_name,
+                    m.faculty_code,   
+                    f.faculty_dept,
+                    f.faculty_school,
+                    array_agg(DISTINCT f.subject) 
+                        FILTER (WHERE f.subject IS NOT NULL AND f.subject != '') AS subjects,
+                    f.faculty_email
+                FROM feedback f
+                LEFT JOIN faculty_master m 
+                    ON f.faculty_name = m.faculty_name
+                WHERE f.faculty_dept = %s
+                GROUP BY f.faculty_name, m.faculty_code, f.faculty_dept, f.faculty_school, f.faculty_email
+                ORDER BY f.faculty_name
             """, [dept])
+
         else:
             return []
+
         return [dict(r) for r in cur.fetchall()]
     
 

@@ -539,13 +539,15 @@ async function loadFacultyCard() {
     const initials = (f.faculty_name || '').split(' ').map(w => w[0]).join('').substring(0, 2);
 
     if (f.faculty_code) {
+      const code = f.faculty_code || f.faculty_name;
       container.innerHTML = `
-    <img 
-      src="${photoBase}${encodeURIComponent(f.faculty_code)}.JPG"
-      style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
-      onerror="this.style.display='none'; this.parentElement.textContent='${initials}'"
-    />
-  `;
+  <img 
+    src="${photoBase}${encodeURIComponent(code)}.jpg"
+    style="width:100%;height:100%;object-fit:cover;border-radius:50%;cursor:pointer"
+    onclick="openImgModal(this.src)"
+    onerror="this.style.display='none'; this.parentElement.textContent='${initials}'"
+  />
+`;
     } else {
       container.textContent = initials || '✦';
     }
@@ -1253,18 +1255,18 @@ async function loadRankings() {
   buildRankGrid();
 
   try {
-    const qs  = buildRankQS();
+    const qs = buildRankQS();
     const res = await fetch(`${API}/faculty-rankings?${qs}`);
     const data = await res.json();
 
     const totalFaculty = data.total_faculty || 0;
-    lastTotalFaculty   = totalFaculty;
+    lastTotalFaculty = totalFaculty;
     renderPagination(totalFaculty);
 
     const catMap = {
-      vg:    { rows: data.very_good,      pctKey: 'very_good_pct',      color: '#4f8ef7', label: 'Very Good' },
-      good:  { rows: data.good,           pctKey: 'good_pct',           color: '#3dd9c4', label: 'Good' },
-      sat:   { rows: data.satisfactory,   pctKey: 'satisfactory_pct',   color: '#f7c94f', label: 'Satisfactory' },
+      vg: { rows: data.very_good, pctKey: 'very_good_pct', color: '#4f8ef7', label: 'Very Good' },
+      good: { rows: data.good, pctKey: 'good_pct', color: '#3dd9c4', label: 'Good' },
+      sat: { rows: data.satisfactory, pctKey: 'satisfactory_pct', color: '#f7c94f', label: 'Satisfactory' },
       unsat: { rows: data.unsatisfactory, pctKey: 'unsatisfactory_pct', color: '#f75f5f', label: 'Unsatisfactory' },
     };
 
@@ -1317,11 +1319,20 @@ function renderRankCard(catKey, catData, totalFaculty) {
     </div>
     <div class="rank-av-wrap">
       <img
-        src="${photoBase}${encodeURIComponent(r.faculty_code || '')}.JPG"
-        class="rank-photo"
-        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
-        style="${r.faculty_code ? '' : 'display:none'}"
-      />
+  src="${photoBase}${encodeURIComponent(r.faculty_code || r.faculty_name)}.jpg"
+  class="rank-photo"
+  style="${r.faculty_code ? '' : 'display:none'}; cursor:pointer"
+  onclick="openImgModal(this.src)"
+  onerror="
+    if (!this.dataset.retry) {
+      this.dataset.retry = '1';
+      this.src='${photoBase}${encodeURIComponent(r.faculty_code || r.faculty_name)}.JPG';
+    } else {
+      this.style.display='none';
+      this.nextElementSibling.style.display='flex';
+    }
+  "
+/>
       <div class="rank-av" style="background:${color}22;color:${color};${r.faculty_code ? 'display:none' : ''}">${initials}</div>
     </div>
     <div class="rank-info">
@@ -1692,4 +1703,18 @@ function changePage(page) {
   if (page < 1 || page > totalPages) return;
   rankPage = page;
   loadRankings();
+}
+
+function openImgModal(src) {
+  const modal = document.getElementById('imgModal');
+  const img = document.getElementById('imgModalSrc');
+  img.src = src;
+  modal.style.display = 'flex';
+}
+
+function closeImgModal(e) {
+  const modal = document.getElementById('imgModal');
+  if (!e || e.target.id === 'imgModal' || e.target.classList.contains('img-close')) {
+    modal.style.display = 'none';
+  }
 }

@@ -544,8 +544,8 @@ body {
 }
 
 .fav {
-  width: 46px;
-  height: 46px;
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--accent), var(--teal));
   display: flex;
@@ -555,6 +555,7 @@ body {
   font-size: 16px;
   color: #fff;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .fn {
@@ -1404,4 +1405,51 @@ body {
 [data-theme="light"] .fsel option {
   background: #ffffff;
   color: #1a1a1a;
+}
+
+/* Overlay */
+.img-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Content box */
+.img-modal-content {
+  position: relative;
+  max-width: 420px;
+  max-height: 80vh;
+}
+
+/* Image */
+.img-modal img {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+/* Close button */
+.img-close {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: white;
+  color: black;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.fav img:hover {
+  transform: scale(1.08);
+  transition: 0.2s;
 }
