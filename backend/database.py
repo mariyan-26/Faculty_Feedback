@@ -585,13 +585,8 @@ def get_faculty_rankings(
         year=year, programme=programme, batch=batch
     )
 
-    search_clause = ""
-    search_params = []
-    if search:
-        search_clause = "AND LOWER(f.faculty_name) LIKE LOWER(%s)"
-        search_params = [f"%{search}%"]
-
-    query = f"""
+    # Base CTE (aggregation only once)
+    base_cte = f"""
         WITH faculty_stats AS (
             SELECT
                 f.faculty_name,
@@ -599,14 +594,14 @@ def get_faculty_rankings(
                 f.faculty_school,
                 fm.faculty_code,
                 COUNT(*) AS total,
-                SUM(CASE WHEN f.selected_option = 'Very Good'      THEN 1 ELSE 0 END) AS very_good,
-                SUM(CASE WHEN f.selected_option = 'Good'           THEN 1 ELSE 0 END) AS good,
-                SUM(CASE WHEN f.selected_option = 'Satisfactory'   THEN 1 ELSE 0 END) AS satisfactory,
+                SUM(CASE WHEN f.selected_option = 'Very Good' THEN 1 ELSE 0 END) AS very_good,
+                SUM(CASE WHEN f.selected_option = 'Good' THEN 1 ELSE 0 END) AS good,
+                SUM(CASE WHEN f.selected_option = 'Satisfactory' THEN 1 ELSE 0 END) AS satisfactory,
                 SUM(CASE WHEN f.selected_option = 'Unsatisfactory' THEN 1 ELSE 0 END) AS unsatisfactory,
                 ROUND(AVG(f.score), 2) AS avg_score,
-                ROUND((SUM(CASE WHEN f.selected_option = 'Very Good'      THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS very_good_pct,
-                ROUND((SUM(CASE WHEN f.selected_option = 'Good'           THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS good_pct,
-                ROUND((SUM(CASE WHEN f.selected_option = 'Satisfactory'   THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS satisfactory_pct,
+                ROUND((SUM(CASE WHEN f.selected_option = 'Very Good' THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS very_good_pct,
+                ROUND((SUM(CASE WHEN f.selected_option = 'Good' THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS good_pct,
+                ROUND((SUM(CASE WHEN f.selected_option = 'Satisfactory' THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS satisfactory_pct,
                 ROUND((SUM(CASE WHEN f.selected_option = 'Unsatisfactory' THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS unsatisfactory_pct
             FROM feedback f
             LEFT JOIN faculty_master fm ON fm.faculty_email = f.faculty_email
@@ -614,73 +609,71 @@ def get_faculty_rankings(
             AND f.is_suggestion = FALSE
             AND f.selected_option IN ('Very Good','Good','Satisfactory','Unsatisfactory')
             AND f.faculty_name IS NOT NULL AND f.faculty_name != ''
-            {search_clause}
             GROUP BY f.faculty_name, f.faculty_dept, f.faculty_school, fm.faculty_code
         ),
         ranked AS (
             SELECT *,
-                RANK() OVER (ORDER BY very_good_pct      DESC) AS vg_rank,
-                RANK() OVER (ORDER BY good_pct           DESC) AS good_rank,
-                RANK() OVER (ORDER BY satisfactory_pct   DESC) AS sat_rank,
+                RANK() OVER (ORDER BY very_good_pct DESC) AS vg_rank,
+                RANK() OVER (ORDER BY good_pct DESC) AS good_rank,
+                RANK() OVER (ORDER BY satisfactory_pct DESC) AS sat_rank,
                 RANK() OVER (ORDER BY unsatisfactory_pct DESC) AS unsat_rank
             FROM faculty_stats
         )
-        SELECT *, COUNT(*) OVER () AS total_count
-        FROM ranked
     """
 
-    all_params = params + search_params
+    # Optional search (AFTER ranking)
+    search_clause = ""
+    search_params = []
+    if search:
+        search_clause = "WHERE LOWER(faculty_name) LIKE LOWER(%s)"
+        search_params = [f"%{search}%"]
+
+    # FINAL QUERY (LIMIT applied here)
+    final_query = f"""
+        {base_cte}
+        SELECT *
+        FROM ranked
+        {search_clause}
+        ORDER BY unsat_rank
+        LIMIT %s OFFSET %s
+    """
+
+    final_params = params + search_params + [limit, offset]
+
+    # COUNT QUERY (separate, fast enough)
+    count_query = f"""
+        {base_cte}
+        SELECT COUNT(*) AS total FROM ranked
+        {search_clause}
+    """
+
+    count_params = params + search_params
 
     with cursor() as cur:
-        cur.execute(query, all_params)
-        all_rows = [dict(r) for r in cur.fetchall()]
+        # main data
+        cur.execute(final_query, final_params)
+        rows = [dict(r) for r in cur.fetchall()]
 
-    if not all_rows:
-        return {
-            "total_faculty": 0,
-            "very_good": [], "good": [],
-            "satisfactory": [], "unsatisfactory": []
-        }
+        # total count
+        cur.execute(count_query, count_params)
+        total_count = cur.fetchone()["total"]
 
-    total_count = all_rows[0]['total_count']
-
-    # ── Sort each category independently ──────────────────────
-    vg_sorted    = sorted(all_rows, key=lambda x: x['very_good_pct'],      reverse=True)
-    good_sorted  = sorted(all_rows, key=lambda x: x['good_pct'],           reverse=True)
-    sat_sorted   = sorted(all_rows, key=lambda x: x['satisfactory_pct'],   reverse=True)
-    unsat_sorted = sorted(all_rows, key=lambda x: x['unsatisfactory_pct'], reverse=True)
-
-    # ── Exclusive mode ─────────────────────────────────────────
-    if exclusive:
-        assigned = set()
-        def excl_filter(lst):
-            out = []
-            for r in lst:
-                if r['faculty_name'] not in assigned:
-                    assigned.add(r['faculty_name'])
-                    out.append(r)
-            return out
-        vg_sorted    = excl_filter(vg_sorted)
-        good_sorted  = excl_filter(good_sorted)
-        sat_sorted   = excl_filter(sat_sorted)
-        unsat_sorted = excl_filter(unsat_sorted)
-
-    # ── Attach true global rank + paginate ────────────────────
-    def attach_and_paginate(lst, rank_key):
+    # No Python sorting needed
+    def attach(rows, rank_key):
         result = []
-        for i, r in enumerate(lst):
+        for r in rows:
             row = dict(r)
-            row['rank'] = i + 1          # true global rank
-            row['total_faculty'] = total_count
+            row["rank"] = r[rank_key]  # correct global rank
+            row["total_faculty"] = total_count
             result.append(row)
-        return result[offset: offset + limit]
+        return result
 
     return {
         "total_faculty": total_count,
-        "very_good":      attach_and_paginate(vg_sorted,    'vg_rank'),
-        "good":           attach_and_paginate(good_sorted,  'good_rank'),
-        "satisfactory":   attach_and_paginate(sat_sorted,   'sat_rank'),
-        "unsatisfactory": attach_and_paginate(unsat_sorted, 'unsat_rank'),
+        "very_good":      attach(rows, "vg_rank"),
+        "good":           attach(rows, "good_rank"),
+        "satisfactory":   attach(rows, "sat_rank"),
+        "unsatisfactory": attach(rows, "unsat_rank"),
     }
 
 def get_ranking_suggestions(faculty_name, role="admin", dept=None, school=None,

@@ -453,6 +453,23 @@ function buildQS(extras = {}) {
   return p.toString();
 }
 
+function buildRankQS() {
+  const p = new URLSearchParams();
+
+  p.set('search', rankSearch || '');
+  p.set('category', rankCat || '');
+  p.set('exclusive', rankExclusive ? '1' : '0');
+  p.set('limit', rankCount);
+  p.set('offset', (rankPage - 1) * rankCount);
+
+  // keep role-based restriction (IMPORTANT)
+  p.set('role', SESSION?.role || 'admin');
+  if (SESSION?.dept) p.set('dept', SESSION.dept);
+  if (SESSION?.school) p.set('school', SESSION.school);
+
+  return p.toString();
+}
+
 function setLoading(cardId, show) {
   const card = document.getElementById(cardId);
   const existing = card.querySelector('.loading-overlay');
@@ -1235,26 +1252,13 @@ async function renderInstitutionalChart(data) {
 async function loadRankings() {
   buildRankGrid();
 
-  const f = getF();
-  const p = new URLSearchParams({
-    role:      f.role,
-    limit:     rankCount,
-    offset:    (rankPage - 1) * rankCount,
-    exclusive: rankExclusive,
-  });
-  if (f.dept)      p.set('dept',      f.dept);
-  if (f.school)    p.set('school',    f.school);
-  if (f.year)      p.set('year',      f.year);
-  if (f.programme) p.set('programme', f.programme);
-  if (f.batch)     p.set('batch',     f.batch);
-  if (rankSearch)  p.set('search',    rankSearch);
-
   try {
-    const res  = await fetch(`${API}/faculty-rankings?${p}`);
+    const qs  = buildRankQS();
+    const res = await fetch(`${API}/faculty-rankings?${qs}`);
     const data = await res.json();
 
-    const totalFaculty   = data.total_faculty || 0;
-    lastTotalFaculty     = totalFaculty;
+    const totalFaculty = data.total_faculty || 0;
+    lastTotalFaculty   = totalFaculty;
     renderPagination(totalFaculty);
 
     const catMap = {
@@ -1272,7 +1276,7 @@ async function loadRankings() {
       renderRankCard(cat, catMap[cat], totalFaculty);
     });
 
-  } catch(e) {
+  } catch (e) {
     console.warn('rankings error', e);
   }
 }

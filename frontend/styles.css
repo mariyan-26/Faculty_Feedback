@@ -1385,3 +1385,23 @@ body {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+
+/* DEFAULT (DARK THEME) */
+.fsel {
+  background: var(--s1);
+  color: var(--text);
+  border: 1px solid var(--border2);
+}
+
+/* LIGHT THEME FIX */
+[data-theme="light"] .fsel {
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  border: 1px solid #dcdcdc !important;
+}
+
+/* Dropdown options (important for visibility) */
+[data-theme="light"] .fsel option {
+  background: #ffffff;
+  color: #1a1a1a;
+}
