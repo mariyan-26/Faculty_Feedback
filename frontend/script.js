@@ -22,7 +22,7 @@ const API = isLocal
 // Photo base (already correct)
 const photoBase = isLocal
   ? 'http://127.0.0.1:5500/assets/faculty_photos/'
-  : 'https://faculty-feedback-797259924730-ap-south-1-an.s3.ap-south-1.amazonaws.com/assets/faculty_photos/';
+  : 'https://feedback.kristujayanti.edu.in/assets/faculty_photos/';
 
 // ── STATE ─────────────────────────────────────────────────────
 let SESSION = null;
@@ -472,27 +472,27 @@ function buildRankQS() {
   const f = getF();
 
   const sortMap = {
-    vg:    'very_good',
-    good:  'good',
-    sat:   'satisfactory',
+    vg: 'very_good',
+    good: 'good',
+    sat: 'satisfactory',
     unsat: 'unsatisfactory',
-    all:   'all',
+    all: 'all',
   };
 
   const params = new URLSearchParams({
-    role:    f.role || 'admin',
-    limit:   rankCount,
-    offset:  (rankPage - 1) * rankCount,
+    role: f.role || 'admin',
+    limit: rankCount,
+    offset: (rankPage - 1) * rankCount,
     sort_by: sortMap[rankCat] || 'unsatisfactory',
   });
 
-  if (rankSearch)    params.set('search',    rankSearch);
+  if (rankSearch) params.set('search', rankSearch);
   if (rankExclusive) params.set('exclusive', 'true');
-  if (f.dept)        params.set('dept',       f.dept);
-  if (f.school)      params.set('school',     f.school);
-  if (f.year)        params.set('year',       f.year);
-  if (f.programme)   params.set('programme',  f.programme);
-  if (f.batch)       params.set('batch',      f.batch);
+  if (f.dept) params.set('dept', f.dept);
+  if (f.school) params.set('school', f.school);
+  if (f.year) params.set('year', f.year);
+  if (f.programme) params.set('programme', f.programme);
+  if (f.batch) params.set('batch', f.batch);
 
   return params.toString();
 }
@@ -501,18 +501,18 @@ async function loadRankings() {
   buildRankGrid();
 
   try {
-    const qs   = buildRankQS();
-    const res  = await fetch(`${API}/faculty-rankings?${qs}`);
+    const qs = buildRankQS();
+    const res = await fetch(`${API}/faculty-rankings?${qs}`);
     const data = await res.json();
 
-    const totalFaculty   = data.total_faculty || 0;
-    lastTotalFaculty     = totalFaculty;
+    const totalFaculty = data.total_faculty || 0;
+    lastTotalFaculty = totalFaculty;
     renderPagination(totalFaculty);
 
     const catMap = {
-      vg:    { rows: data.very_good,      pctKey: 'very_good_pct',      color: '#4f8ef7', label: 'Very Good'      },
-      good:  { rows: data.good,           pctKey: 'good_pct',           color: '#3dd9c4', label: 'Good'           },
-      sat:   { rows: data.satisfactory,   pctKey: 'satisfactory_pct',   color: '#f7c94f', label: 'Satisfactory'   },
+      vg: { rows: data.very_good, pctKey: 'very_good_pct', color: '#4f8ef7', label: 'Very Good' },
+      good: { rows: data.good, pctKey: 'good_pct', color: '#3dd9c4', label: 'Good' },
+      sat: { rows: data.satisfactory, pctKey: 'satisfactory_pct', color: '#f7c94f', label: 'Satisfactory' },
       unsat: { rows: data.unsatisfactory, pctKey: 'unsatisfactory_pct', color: '#f75f5f', label: 'Unsatisfactory' },
     };
 
@@ -598,18 +598,25 @@ async function loadFacultyCard() {
     const initials = (f.faculty_name || '').split(' ').map(w => w[0]).join('').substring(0, 2);
 
     if (f.faculty_code) {
-      const code = f.faculty_code || f.faculty_name;
-      container.innerHTML = `
-  <img 
-    src="${photoBase}${encodeURIComponent(code)}.jpg"
-    style="width:100%;height:100%;object-fit:cover;border-radius:50%;cursor:pointer"
-    onclick="openImgModal(this.src)"
-    onerror="this.style.display='none'; this.parentElement.textContent='${initials}'"
-  />
-`;
-    } else {
-      container.textContent = initials || '✦';
+      const code = f.faculty_code;
+      const safeInitials = (initials || '✦').replace(/'/g, "\\'");
+      container.textContent = '';
+      const img = document.createElement('img');
+      img.src = `${photoBase}${code}.JPG`;
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;cursor:pointer';
+      img.onclick = () => openImgModal(img.src);
+      img.onerror = () => {
+        if (!img.dataset.retry) {
+          img.dataset.retry = '1';
+          img.src = `${photoBase}${code}.jpg`;
+        } else {
+          img.style.display = 'none';
+          container.textContent = safeInitials || '✦';
+        }
+      };
+      container.appendChild(img);
     }
+
     document.getElementById('facName').textContent = f.faculty_name || '—';
     document.getElementById('facDept').textContent = `${f.faculty_dept || ''} · ${f.faculty_school || ''}`;
     const subjs = f.subjects || [];
@@ -1314,26 +1321,26 @@ async function loadRankings() {
   buildRankGrid();
 
   try {
-    const qs  = buildRankQS();
+    const qs = buildRankQS();
     const res = await fetch(`${API}/faculty-rankings?${qs}`);
     const data = await res.json();
 
     const totalFaculty = data.total_faculty || 0;
-    lastTotalFaculty   = totalFaculty;
+    lastTotalFaculty = totalFaculty;
     renderPagination(totalFaculty);
 
     const catMap = {
-      vg:    { pctKey: 'very_good_pct',      color: '#4f8ef7', label: 'Very Good'      },
-      good:  { pctKey: 'good_pct',           color: '#3dd9c4', label: 'Good'           },
-      sat:   { pctKey: 'satisfactory_pct',   color: '#f7c94f', label: 'Satisfactory'   },
+      vg: { pctKey: 'very_good_pct', color: '#4f8ef7', label: 'Very Good' },
+      good: { pctKey: 'good_pct', color: '#3dd9c4', label: 'Good' },
+      sat: { pctKey: 'satisfactory_pct', color: '#f7c94f', label: 'Satisfactory' },
       unsat: { pctKey: 'unsatisfactory_pct', color: '#f75f5f', label: 'Unsatisfactory' },
     };
 
     if (rankCat === 'all') {
       // Backend returns { very_good: [], good: [], satisfactory: [], unsatisfactory: [] }
-      catMap.vg.rows    = data.very_good      || [];
-      catMap.good.rows  = data.good           || [];
-      catMap.sat.rows   = data.satisfactory   || [];
+      catMap.vg.rows = data.very_good || [];
+      catMap.good.rows = data.good || [];
+      catMap.sat.rows = data.satisfactory || [];
       catMap.unsat.rows = data.unsatisfactory || [];
 
       ['vg', 'good', 'sat', 'unsat'].forEach(cat => {
@@ -1407,14 +1414,14 @@ function renderRankCard(catKey, catData, totalFaculty) {
 
       <div class="rank-av-wrap">
         <img
-          src="${photoBase}${encodeURIComponent(r.faculty_code || r.faculty_name)}.jpg"
+          src="${photoBase}${r.faculty_code}.JPG"
           class="rank-photo"
           style="${r.faculty_code ? '' : 'display:none'}; cursor:pointer"
           onclick="openImgModal(this.src)"
           onerror="
             if (!this.dataset.retry) {
               this.dataset.retry = '1';
-              this.src='${photoBase}${encodeURIComponent(r.faculty_code || r.faculty_name)}.JPG';
+               this.src='${photoBase}${r.faculty_code}.jpg';
             } else {
               this.style.display='none';
               this.nextElementSibling.style.display='flex';
@@ -1685,8 +1692,8 @@ function closeRankModal() {
 function setRankCat(cat, el) {
   rankCat = cat;
   rankPage = 1; //FIX
-   document.querySelectorAll('.rank-cat-btn').forEach(btn => {
-     btn.classList.remove('active');
+  document.querySelectorAll('.rank-cat-btn').forEach(btn => {
+    btn.classList.remove('active');
   });
   el.classList.add('active');
   console.log("Selected category:", rankCat);
