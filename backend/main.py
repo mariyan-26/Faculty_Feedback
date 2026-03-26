@@ -336,14 +336,15 @@ async def faculty_rankings(
     offset: int = Query(0),
     search: Optional[str] = Query(None),
     exclusive: bool = Query(False),
+    sort_by: str = Query("unsatisfactory"),  # ← add this
 ):
     return db.get_faculty_rankings(
         role=role, dept=dept, school=school,
         year=year, programme=programme, batch=batch,
         limit=limit, offset=offset,
-        search=search, exclusive=exclusive
+        search=search, exclusive=exclusive,
+        sort_by=sort_by,                     # ← add this
     )
-
 
 @app.get("/api/ranking-suggestions")
 async def ranking_suggestions(

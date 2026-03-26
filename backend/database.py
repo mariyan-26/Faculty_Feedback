@@ -602,21 +602,14 @@ def get_faculty_rankings(
         year=year, programme=programme, batch=batch
     )
 
-    sort_map = {
-        "very_good": "vg_rank",
-        "good": "good_rank",
-        "satisfactory": "sat_rank",
-        "unsatisfactory": "unsat_rank"
-    }
-    order_by = sort_map.get(sort_by, "unsat_rank")
-
     search_clause = ""
     search_params = []
     if search:
         search_clause = "WHERE LOWER(faculty_name) LIKE LOWER(%s)"
         search_params = [f"%{search}%"]
 
-    query = f"""
+    # Base CTE shared by all queries
+    base_cte = f"""
         WITH faculty_stats AS (
             SELECT
                 f.faculty_name,
@@ -624,15 +617,14 @@ def get_faculty_rankings(
                 f.faculty_school,
                 fm.faculty_code,
                 COUNT(*) AS total,
-                SUM(CASE WHEN f.selected_option = 'Very Good' THEN 1 ELSE 0 END) AS very_good,
-                SUM(CASE WHEN f.selected_option = 'Good' THEN 1 ELSE 0 END) AS good,
-                SUM(CASE WHEN f.selected_option = 'Satisfactory' THEN 1 ELSE 0 END) AS satisfactory,
+                SUM(CASE WHEN f.selected_option = 'Very Good'      THEN 1 ELSE 0 END) AS very_good,
+                SUM(CASE WHEN f.selected_option = 'Good'           THEN 1 ELSE 0 END) AS good,
+                SUM(CASE WHEN f.selected_option = 'Satisfactory'   THEN 1 ELSE 0 END) AS satisfactory,
                 SUM(CASE WHEN f.selected_option = 'Unsatisfactory' THEN 1 ELSE 0 END) AS unsatisfactory,
                 ROUND(AVG(f.score), 2) AS avg_score,
-
-                ROUND((SUM(CASE WHEN f.selected_option = 'Very Good' THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS very_good_pct,
-                ROUND((SUM(CASE WHEN f.selected_option = 'Good' THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS good_pct,
-                ROUND((SUM(CASE WHEN f.selected_option = 'Satisfactory' THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS satisfactory_pct,
+                ROUND((SUM(CASE WHEN f.selected_option = 'Very Good'      THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS very_good_pct,
+                ROUND((SUM(CASE WHEN f.selected_option = 'Good'           THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS good_pct,
+                ROUND((SUM(CASE WHEN f.selected_option = 'Satisfactory'   THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS satisfactory_pct,
                 ROUND((SUM(CASE WHEN f.selected_option = 'Unsatisfactory' THEN 1 ELSE 0 END)::numeric / COUNT(*)) * 100, 1) AS unsatisfactory_pct
             FROM feedback f
             LEFT JOIN faculty_master fm ON fm.faculty_email = f.faculty_email
@@ -642,47 +634,84 @@ def get_faculty_rankings(
             AND f.faculty_name IS NOT NULL AND f.faculty_name != ''
             GROUP BY f.faculty_name, f.faculty_dept, f.faculty_school, fm.faculty_code
         ),
-
         ranked AS (
             SELECT *,
-                RANK() OVER (ORDER BY very_good_pct DESC, total DESC) AS vg_rank,
-                RANK() OVER (ORDER BY good_pct DESC, total DESC) AS good_rank,
-                RANK() OVER (ORDER BY satisfactory_pct DESC, total DESC) AS sat_rank,
+                RANK() OVER (ORDER BY very_good_pct      DESC, total DESC) AS vg_rank,
+                RANK() OVER (ORDER BY good_pct           DESC, total DESC) AS good_rank,
+                RANK() OVER (ORDER BY satisfactory_pct   DESC, total DESC) AS sat_rank,
                 RANK() OVER (ORDER BY unsatisfactory_pct DESC, total DESC) AS unsat_rank
             FROM faculty_stats
         ),
-
         filtered AS (
             SELECT * FROM ranked
             {search_clause}
         ),
-
         counts AS (
             SELECT COUNT(*) AS total FROM filtered
-        ),
-
-        final AS (
-            SELECT * FROM filtered
-            ORDER BY {order_by}
-            LIMIT %s OFFSET %s
         )
-
-        SELECT
-            (SELECT total FROM counts) AS total_faculty,
-            json_agg(row_to_json(f)) AS data
-        FROM final f
     """
 
-    params_final = params + search_params + [limit, offset]
+    sort_map = {
+        "very_good":      "vg_rank",
+        "good":           "good_rank",
+        "satisfactory":   "sat_rank",
+        "unsatisfactory": "unsat_rank",
+    }
+    order_by = sort_map.get(sort_by, "unsat_rank")
+
+    # Single-category mode — return just `data` sorted by requested category
+    if sort_by != "all":
+        query = base_cte + f"""
+            SELECT
+                (SELECT total FROM counts) AS total_faculty,
+                json_agg(row_to_json(f)) AS data
+            FROM (
+                SELECT * FROM filtered
+                ORDER BY {order_by}
+                LIMIT %s OFFSET %s
+            ) f
+        """
+        params_final = params + search_params + [limit, offset]
+
+        with cursor() as cur:
+            cur.execute(query, params_final)
+            result = cur.fetchone()
+
+        return {
+            "total_faculty": result["total_faculty"] or 0,
+            "category":      sort_by,
+            "data":          result["data"] or [],
+        }
+
+    # All-categories mode — return 4 separate sorted lists
+    query = base_cte + """
+        SELECT
+            (SELECT total FROM counts) AS total_faculty,
+            (SELECT json_agg(row_to_json(r)) FROM (
+                SELECT * FROM filtered ORDER BY vg_rank    LIMIT %s OFFSET %s
+            ) r) AS very_good,
+            (SELECT json_agg(row_to_json(r)) FROM (
+                SELECT * FROM filtered ORDER BY good_rank  LIMIT %s OFFSET %s
+            ) r) AS good,
+            (SELECT json_agg(row_to_json(r)) FROM (
+                SELECT * FROM filtered ORDER BY sat_rank   LIMIT %s OFFSET %s
+            ) r) AS satisfactory,
+            (SELECT json_agg(row_to_json(r)) FROM (
+                SELECT * FROM filtered ORDER BY unsat_rank LIMIT %s OFFSET %s
+            ) r) AS unsatisfactory
+    """
+    params_final = params + search_params + [limit, offset] * 4
 
     with cursor() as cur:
         cur.execute(query, params_final)
         result = cur.fetchone()
 
     return {
-        "total_faculty": result["total_faculty"],
-        "category": sort_by,
-        "data": result["data"] or []
+        "total_faculty":  result["total_faculty"] or 0,
+        "very_good":      result["very_good"]      or [],
+        "good":           result["good"]           or [],
+        "satisfactory":   result["satisfactory"]   or [],
+        "unsatisfactory": result["unsatisfactory"] or [],
     }
 
 def get_ranking_suggestions(faculty_name, role="admin", dept=None, school=None,

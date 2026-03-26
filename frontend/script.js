@@ -469,31 +469,64 @@ function buildQS(extras = {}) {
 }
 
 function buildRankQS() {
-  const f = getF(); // your filters
+  const f = getF();
 
   const sortMap = {
-    vg: 'very_good',
-    good: 'good',
-    sat: 'satisfactory',
-    unsat: 'unsatisfactory'
+    vg:    'very_good',
+    good:  'good',
+    sat:   'satisfactory',
+    unsat: 'unsatisfactory',
+    all:   'all',
   };
 
   const params = new URLSearchParams({
-    role: f.role || 'admin',
-    limit: rankCount,
-    offset: (rankPage - 1) * rankCount,
-    sort_by: sortMap[rankCat] || 'unsatisfactory'   // ✅ FIX
+    role:    f.role || 'admin',
+    limit:   rankCount,
+    offset:  (rankPage - 1) * rankCount,
+    sort_by: sortMap[rankCat] || 'unsatisfactory',
   });
 
-  if (rankSearch) params.set('search', rankSearch);
+  if (rankSearch)    params.set('search',    rankSearch);
   if (rankExclusive) params.set('exclusive', 'true');
-  if (f.dept) params.set('dept', f.dept);
-  if (f.school) params.set('school', f.school);
-  if (f.year) params.set('year', f.year);
-  if (f.programme) params.set('programme', f.programme);
-  if (f.batch) params.set('batch', f.batch);
+  if (f.dept)        params.set('dept',       f.dept);
+  if (f.school)      params.set('school',     f.school);
+  if (f.year)        params.set('year',       f.year);
+  if (f.programme)   params.set('programme',  f.programme);
+  if (f.batch)       params.set('batch',      f.batch);
 
   return params.toString();
+}
+
+async function loadRankings() {
+  buildRankGrid();
+
+  try {
+    const qs   = buildRankQS();
+    const res  = await fetch(`${API}/faculty-rankings?${qs}`);
+    const data = await res.json();
+
+    const totalFaculty   = data.total_faculty || 0;
+    lastTotalFaculty     = totalFaculty;
+    renderPagination(totalFaculty);
+
+    const catMap = {
+      vg:    { rows: data.very_good,      pctKey: 'very_good_pct',      color: '#4f8ef7', label: 'Very Good'      },
+      good:  { rows: data.good,           pctKey: 'good_pct',           color: '#3dd9c4', label: 'Good'           },
+      sat:   { rows: data.satisfactory,   pctKey: 'satisfactory_pct',   color: '#f7c94f', label: 'Satisfactory'   },
+      unsat: { rows: data.unsatisfactory, pctKey: 'unsatisfactory_pct', color: '#f75f5f', label: 'Unsatisfactory' },
+    };
+
+    const catsToRender = rankCat === 'all'
+      ? ['vg', 'good', 'sat', 'unsat']
+      : [rankCat];
+
+    catsToRender.forEach(cat => {
+      renderRankCard(cat, catMap[cat], totalFaculty);
+    });
+
+  } catch (e) {
+    console.warn('rankings error', e);
+  }
 }
 
 function setLoading(cardId, show) {
@@ -1281,28 +1314,37 @@ async function loadRankings() {
   buildRankGrid();
 
   try {
-    const qs = buildRankQS();
+    const qs  = buildRankQS();
     const res = await fetch(`${API}/faculty-rankings?${qs}`);
     const data = await res.json();
 
     const totalFaculty = data.total_faculty || 0;
-    lastTotalFaculty = totalFaculty;
+    lastTotalFaculty   = totalFaculty;
     renderPagination(totalFaculty);
 
     const catMap = {
-      vg: { rows: data.very_good, pctKey: 'very_good_pct', color: '#4f8ef7', label: 'Very Good' },
-      good: { rows: data.good, pctKey: 'good_pct', color: '#3dd9c4', label: 'Good' },
-      sat: { rows: data.satisfactory, pctKey: 'satisfactory_pct', color: '#f7c94f', label: 'Satisfactory' },
-      unsat: { rows: data.unsatisfactory, pctKey: 'unsatisfactory_pct', color: '#f75f5f', label: 'Unsatisfactory' },
+      vg:    { pctKey: 'very_good_pct',      color: '#4f8ef7', label: 'Very Good'      },
+      good:  { pctKey: 'good_pct',           color: '#3dd9c4', label: 'Good'           },
+      sat:   { pctKey: 'satisfactory_pct',   color: '#f7c94f', label: 'Satisfactory'   },
+      unsat: { pctKey: 'unsatisfactory_pct', color: '#f75f5f', label: 'Unsatisfactory' },
     };
 
-    const catsToRender = rankCat === 'all'
-      ? ['vg', 'good', 'sat', 'unsat']
-      : [rankCat];
+    if (rankCat === 'all') {
+      // Backend returns { very_good: [], good: [], satisfactory: [], unsatisfactory: [] }
+      catMap.vg.rows    = data.very_good      || [];
+      catMap.good.rows  = data.good           || [];
+      catMap.sat.rows   = data.satisfactory   || [];
+      catMap.unsat.rows = data.unsatisfactory || [];
 
-    catsToRender.forEach(cat => {
-      renderRankCard(cat, catMap[cat], totalFaculty);
-    });
+      ['vg', 'good', 'sat', 'unsat'].forEach(cat => {
+        renderRankCard(cat, catMap[cat], totalFaculty);
+      });
+
+    } else {
+      // Backend returns { data: [...] } for single category
+      catMap[rankCat].rows = data.data || [];
+      renderRankCard(rankCat, catMap[rankCat], totalFaculty);
+    }
 
   } catch (e) {
     console.warn('rankings error', e);
@@ -1391,7 +1433,7 @@ function renderRankCard(catKey, catData, totalFaculty) {
 
       <div class="rank-right">
         <span class="rank-badge-pill" style="background:${color}22;color:${color}">
-          ${r[pctKey]}% · ${Number(r[countKey] || 0).toLocaleString()} ${label}
+          ${r[pctKey]}% ${label} (${Number(r[countKey] || 0).toLocaleString()} of ${Number(r.total).toLocaleString()})
         </span>
 
         <span class="rank-stat-line">
