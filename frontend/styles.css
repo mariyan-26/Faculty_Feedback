@@ -1453,3 +1453,46 @@ body {
   transform: scale(1.08);
   transition: 0.2s;
 }
+
+.rsm-cat-tile {
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rsm-cat-tile .rsm-pct {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.rsm-cat-tile .rsm-label {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.rsm-cat-tile .rsm-rank {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.rsm-cat-tile .rsm-count {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+#rankSummaryModal > div {
+  background: var(--card);
+  backdrop-filter: none;
+}
+
+.rsm-cat-tile {
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 1 !important;
+}

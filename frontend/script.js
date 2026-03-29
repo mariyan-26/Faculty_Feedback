@@ -52,6 +52,12 @@ const COLORS = {
 };
 const RATINGS = ['Very Good', 'Good', 'Satisfactory', 'Unsatisfactory'];
 
+const rankCardDept = { vg: '', good: '', sat: '', unsat: '' };
+
+let globalTotalFaculty = 0;
+
+//const displayTotal = globalTotalFaculty || r.vg_rank || r.good_rank || r.sat_rank || r.unsat_rank || totalFaculty;
+
 const getVar = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 Chart.defaults.color = getVar('--muted');
 Chart.defaults.scale.grid.color = getVar('--grid-color');
@@ -494,19 +500,36 @@ function buildRankQS() {
   if (f.programme) params.set('programme', f.programme);
   if (f.batch) params.set('batch', f.batch);
 
+  // Per-card dept filter (only applies in single-cat mode)
+  if (rankCat !== 'all' && rankCardDept[rankCat]) {
+    params.set('dept', rankCardDept[rankCat]);
+  }
+
   return params.toString();
 }
 
 async function loadRankings() {
   buildRankGrid();
+  await initGlobalTotal();
 
   try {
+    if (!globalTotalFaculty) {
+      const initQS = buildRankQS();  
+      const baseParams = new URLSearchParams(initQS);
+      baseParams.delete('search');
+      const initRes = await fetch(`${API}/faculty-rankings?${baseParams}`);
+      const initData = await initRes.json();
+      globalTotalFaculty = initData.total_faculty || 0;
+    }
     const qs = buildRankQS();
     const res = await fetch(`${API}/faculty-rankings?${qs}`);
     const data = await res.json();
 
     const totalFaculty = data.total_faculty || 0;
     lastTotalFaculty = totalFaculty;
+
+    if (!rankSearch) globalTotalFaculty = totalFaculty;
+
     renderPagination(totalFaculty);
 
     const catMap = {
@@ -521,7 +544,8 @@ async function loadRankings() {
       : [rankCat];
 
     catsToRender.forEach(cat => {
-      renderRankCard(cat, catMap[cat], totalFaculty);
+      //renderRankCard(cat, catMap[cat], totalFaculty);
+      renderRankCard(cat, catMap[cat], globalTotalFaculty);
     });
 
   } catch (e) {
@@ -1362,9 +1386,8 @@ function renderRankCard(catKey, catData, totalFaculty) {
   const container = document.getElementById(`rank-card-${catKey}`);
   if (!container) return;
 
-  // ✅ FIX 1 — ensure rows come from API correctly
   const rows = catData.rows || [];
-  const { pctKey, color, label, title } = catData;
+  const { pctKey, color, label } = catData;
 
   const badge = container.querySelector('.rank-count-badge');
   if (badge) badge.textContent = rankCount >= 50 ? 'All' : `Top ${rankCount}`;
@@ -1378,13 +1401,27 @@ function renderRankCard(catKey, catData, totalFaculty) {
 
   listEl.innerHTML = rows.map((r) => {
 
-    // ✅ FIX 2 — dynamic rank key
+    const displayTotal = Math.max(
+      r.vg_rank || 0,
+      r.good_rank || 0,
+      r.sat_rank || 0,
+      r.unsat_rank || 0,
+      totalFaculty
+    );
+
     const rankKey = {
-      'Very Good': 'vg_rank',
-      'Good': 'good_rank',
-      'Satisfactory': 'sat_rank',
-      'Unsatisfactory': 'unsat_rank'
+      'Very Good':      'vg_rank',
+      'Good':           'good_rank',
+      'Satisfactory':   'sat_rank',
+      'Unsatisfactory': 'unsat_rank',
     }[label];
+
+    const countKey = {
+      'Very Good':      'very_good',
+      'Good':           'good',
+      'Satisfactory':   'satisfactory',
+      'Unsatisfactory': 'unsatisfactory',
+    }[label] || 'very_good';
 
     const initials = (r.faculty_name || '')
       .split(' ')
@@ -1396,20 +1433,18 @@ function renderRankCard(catKey, catData, totalFaculty) {
     const isSearched = rankSearch &&
       r.faculty_name.toLowerCase().includes(rankSearch.toLowerCase());
 
-    const countKey = {
-      'Very Good': 'very_good',
-      'Good': 'good',
-      'Satisfactory': 'satisfactory',
-      'Unsatisfactory': 'unsatisfactory'
-    }[label] || 'very_good';
+    // ✅ serialize r inside the map where r is defined
+    const rJson = encodeURIComponent(JSON.stringify(r));
 
     return `
-    <div class="rank-row-item ${isSearched ? 'rank-searched' : ''}">
-      
+    <div class="rank-row-item ${isSearched ? 'rank-searched' : ''}"
+         style="cursor:pointer"
+         onclick="openRankSummaryModal(JSON.parse(decodeURIComponent('${rJson}')), ${displayTotal})">
+
       <div class="rank-num-block">
         <span class="rank-cat-num" style="color:${color}">#${r[rankKey]}</span>
-        <span class="rank-global-num">${r[rankKey]} of ${totalFaculty}</span>
-        ${isSearched ? `<span class="rank-of-total">of ${totalFaculty}</span>` : ''}
+        <span class="rank-global-num">${r[rankKey]} of ${displayTotal}</span>
+        ${isSearched ? `<span class="rank-of-total">of ${displayTotal}</span>` : ''}
       </div>
 
       <div class="rank-av-wrap">
@@ -1417,11 +1452,11 @@ function renderRankCard(catKey, catData, totalFaculty) {
           src="${photoBase}${r.faculty_code}.JPG"
           class="rank-photo"
           style="${r.faculty_code ? '' : 'display:none'}; cursor:pointer"
-          onclick="openImgModal(this.src)"
+          onclick="event.stopPropagation(); openImgModal(this.src)"
           onerror="
             if (!this.dataset.retry) {
               this.dataset.retry = '1';
-               this.src='${photoBase}${r.faculty_code}.jpg';
+              this.src='${photoBase}${r.faculty_code}.jpg';
             } else {
               this.style.display='none';
               this.nextElementSibling.style.display='flex';
@@ -1448,13 +1483,13 @@ function renderRankCard(catKey, catData, totalFaculty) {
         </span>
 
         <button class="rank-view-sugg-btn"
-          onclick="openRankModal(
+          onclick="event.stopPropagation(); openRankModal(
             '${encodeURIComponent(r.faculty_name)}',
             '${color}',
             '${encodeURIComponent(r.faculty_dept || '')}',
             '${encodeURIComponent(r.faculty_school || '')}',
             ${r.avg_score}, ${r.total}, ${r[rankKey]}, ${r[pctKey]},
-            '${label}', ${totalFaculty},
+            '${label}', ${displayTotal},
             '${r.faculty_code || ''}'
           )">
           View suggestions
@@ -1463,6 +1498,26 @@ function renderRankCard(catKey, catData, totalFaculty) {
 
     </div>`;
   }).join('');
+}
+
+async function initGlobalTotal() {
+  if (globalTotalFaculty) return; // already set, skip
+  try {
+    const f = getF();
+    const params = new URLSearchParams({
+      role:    f.role || 'admin',
+      limit:   1,
+      offset:  0,
+      sort_by: 'unsatisfactory',
+    });
+    if (f.dept)   params.set('dept',   f.dept);
+    if (f.school) params.set('school', f.school);
+    const res  = await fetch(`${API}/faculty-rankings?${params}`);
+    const data = await res.json();
+    globalTotalFaculty = data.total_faculty || 0;
+  } catch(e) {
+    console.warn('globalTotal error', e);
+  }
 }
 
 function buildRankGrid() {
@@ -1479,23 +1534,58 @@ function buildRankGrid() {
   const toShow = rankCat === 'all' ? catDefs : [catDefs.find(c => c.key === rankCat)];
 
   toShow.forEach(cat => {
+    const depts = (FILTERS.departments || []);
+    const deptOptions = depts.map(d =>
+      `<option value="${d}">${d.replace('DEPARTMENT OF ', '')}</option>`
+    ).join('');
+
     const card = document.createElement('div');
     card.className = 'card';
     card.id = `rank-card-${cat.key}`;
     card.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2)">
+      <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border2);flex-wrap:wrap">
         <span style="width:10px;height:10px;border-radius:50%;background:${cat.color};display:inline-block;flex-shrink:0"></span>
         <span style="font-size:13px;font-weight:600;color:var(--text)">${cat.title}</span>
+        <select
+          id="rank-dept-${cat.key}"
+          onchange="onRankDeptChange('${cat.key}', this.value)"
+          style="
+            margin-left:8px;
+            font-size:11px;
+            padding:3px 8px;
+            border-radius:8px;
+            border:1px solid var(--border2);
+            background:var(--card);
+            color:var(--text);
+            cursor:pointer;
+            max-width:220px;
+          "
+        >
+          <option value="">All Departments</option>
+          ${deptOptions}
+        </select>
         <span class="rank-count-badge" style="margin-left:auto;font-size:11px;padding:2px 8px;border-radius:8px;background:${cat.color}22;color:${cat.color};font-weight:600">
           Top ${rankCount}
         </span>
       </div>
       <div class="rank-list">
-      <div class="rank-skeleton"></div>
-      <div class="rank-skeleton"></div>
+        <div class="rank-skeleton"></div>
+        <div class="rank-skeleton"></div>
       </div>`;
     grid.appendChild(card);
+
+    // Restore previously selected dept for this card if any
+    if (rankCardDept[cat.key]) {
+      const sel = card.querySelector(`#rank-dept-${cat.key}`);
+      if (sel) sel.value = rankCardDept[cat.key];
+    }
   });
+}
+
+function onRankDeptChange(catKey, dept) {
+  rankCardDept[catKey] = dept;
+  rankPage = 1;
+  loadRankings();
 }
 
 // ── MODAL ─────────────────────────────────────────────────────
@@ -1823,5 +1913,77 @@ function closeImgModal(e) {
   const modal = document.getElementById('imgModal');
   if (!e || e.target.id === 'imgModal' || e.target.classList.contains('img-close')) {
     modal.style.display = 'none';
+  }
+}
+
+function openRankSummaryModal(r, totalFaculty) {
+  // ── Avatar ─────────────────────────────────────────────────
+
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const modalInner = document.querySelector('#rankSummaryModal > div');
+  modalInner.style.background = isDark ? '#1e1e2e' : '#ffffff';
+
+  const avEl = document.getElementById('rsm-av');
+  const initials = (r.faculty_name || '')
+    .split(' ')
+    .filter(w => /^[A-Z]/.test(w))
+    .map(w => w[0])
+    .join('')
+    .slice(0, 2);
+
+  if (r.faculty_code) {
+    const img = document.createElement('img');
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+    img.src = `${photoBase}${r.faculty_code}.JPG`;
+    img.onerror = () => {
+      if (!img.dataset.retry) {
+        img.dataset.retry = '1';
+        img.src = `${photoBase}${r.faculty_code}.jpg`;
+      } else {
+        img.style.display = 'none';
+        avEl.textContent = initials;
+      }
+    };
+    avEl.textContent = '';
+    avEl.appendChild(img);
+  } else {
+    avEl.textContent = initials || '✦';
+  }
+
+  // ── Name / Dept ────────────────────────────────────────────
+  document.getElementById('rsm-name').textContent = r.faculty_name || '—';
+  document.getElementById('rsm-dept').textContent =
+    `${r.faculty_dept || ''} · ${r.faculty_school || ''}`;
+
+  // ── Category tiles ─────────────────────────────────────────  ← REPLACE FROM HERE
+  const tiles = [
+    { id: 'rsm-vg',    color: '#4f8ef7', bg: '#e8f0fe', label: 'Very Good',      pct: r.very_good_pct,      rank: r.vg_rank,    count: r.very_good      },
+    { id: 'rsm-good',  color: '#1a7a6e', bg: '#e0f7f4', label: 'Good',           pct: r.good_pct,           rank: r.good_rank,  count: r.good           },
+    { id: 'rsm-sat',   color: '#a07800', bg: '#fef8e0', label: 'Satisfactory',   pct: r.satisfactory_pct,   rank: r.sat_rank,   count: r.satisfactory   },
+    { id: 'rsm-unsat', color: '#c0392b', bg: '#fde8e8', label: 'Unsatisfactory', pct: r.unsatisfactory_pct, rank: r.unsat_rank, count: r.unsatisfactory },
+  ];
+
+  tiles.forEach(t => {
+    const el = document.getElementById(t.id);
+    el.style.background = t.bg;
+    el.style.color = t.color;
+    el.innerHTML = `
+      <span class="rsm-pct">${t.pct}%</span>
+      <span class="rsm-label">${t.label}</span>
+      <span class="rsm-rank">Rank #${t.rank} of ${totalFaculty}</span>
+      <span class="rsm-count">${Number(t.count || 0).toLocaleString()} responses</span>
+    `;
+  });                                                             // ← TO HERE
+
+  // ── Meta ───────────────────────────────────────────────────
+  document.getElementById('rsm-avg').textContent = r.avg_score;
+  document.getElementById('rsm-total').textContent = Number(r.total).toLocaleString();
+
+  document.getElementById('rankSummaryModal').style.display = 'flex';
+}
+
+function closeRankSummaryModal(e) {
+  if (!e || e.target.id === 'rankSummaryModal') {
+    document.getElementById('rankSummaryModal').style.display = 'none';
   }
 }
